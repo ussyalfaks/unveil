@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Unveil</title>
+  <meta name="description" content="Reveal who you are to one party, under an NDA backed by a deposit on Stellar." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='13' r='7' fill='%23e84a27'/%3E%3Cpath d='M12 18h8l2 11H10z' fill='%23e84a27'/%3E%3C/svg%3E" />
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <svg viewBox="0 0 32 32" width="28" height="28" aria-hidden="true"><circle cx="16" cy="13" r="7" fill="currentColor"/><path d="M12 18h8l2 11H10z" fill="currentColor"/></svg>
+      <span>Unveil</span>
+      <span class="net">Stellar testnet</span>
+    </div>
+    <button id="connect" class="primary">Connect Freighter</button>
+  </header>
+
+  <section class="hero">
+    <h1>Show your face to <em>one</em> party.<br />Make leaking it cost them.</h1>
+    <p>Pseudonymous builders reveal who they are to a DAO, investor or employer, and nobody else. The requester signs an NDA and locks a deposit on Stellar. Every peek is watermarked with their wallet. Leak it, lose the deposit.</p>
+    <ol class="flow">
+      <li><b>1</b> Anon registers a live photo, encrypted in their browser</li>
+      <li><b>2</b> Requester signs the NDA and locks a deposit</li>
+      <li><b>3</b> Anon approves; only that requester can decrypt</li>
+      <li><b>4</b> Requester peeks through a watermarked keyhole</li>
+      <li><b>5</b> No leak reported → deposit back. Proven leak → anon is paid</li>
+    </ol>
+  </section>
+
+  <nav class="tabs" role="tablist">
+    <button role="tab" data-tab="anon" aria-selected="true">I'm anonymous</button>
+    <button role="tab" data-tab="requester" aria-selected="false">I want to know who</button>
+    <button role="tab" data-tab="audit" aria-selected="false">Audit trail</button>
+    <button role="tab" data-tab="arbiter" aria-selected="false" id="arbiter-tab" hidden>Arbiter</button>
+  </nav>
+
+  <main>
+    <!-- ANON -->
+    <section class="panel" id="anon">
+      <div class="grid">
+        <div class="box">
+          <h2>Your live photo</h2>
+          <p class="muted">Taken now, stamped with your wallet and the time, then encrypted before it leaves this page. The server stores only ciphertext; Stellar stores only its hash.</p>
+          <div class="camera">
+            <video id="cam" autoplay playsinline muted hidden></video>
+            <canvas id="shot" hidden></canvas>
+            <div class="cam-empty">camera off</div>
+          </div>
+          <div class="actions">
+            <button id="cam-start">Start camera</button>
+            <button id="cam-snap" disabled>Take photo</button>
+            <button id="register" class="primary" disabled>Encrypt &amp; register</button>
+          </div>
+        </div>
+        <div class="box">
+          <h2>Your profile</h2>
+          <div id="my-profile"><p class="muted">Connect your wallet to see your profile.</p></div>
+        </div>
+      </div>
+      <h2 class="section-title">Requests to see you</h2>
+      <div id="inbox" class="cards"><p class="muted">Connect your wallet to see requests.</p></div>
+    </section>
+
+    <!-- REQUESTER -->
+    <section class="panel" id="requester" hidden>
+      <div class="grid">
+        <div class="box">
+          <h2>Who do you want to vet?</h2>
+          <label>Anon's Stellar address
+            <span class="row"><input id="anon-addr" placeholder="G…" autocomplete="off" spellcheck="false" /><button id="lookup">Look up</button></span>
+          </label>
+          <div id="anon-card"></div>
+          <div id="request-form" hidden>
+            <label>Your name (on the NDA and every watermark)<input id="nda-name" /></label>
+            <label>Organisation<input id="nda-org" /></label>
+            <label>Purpose<input id="nda-purpose" placeholder="e.g. vetting before treasury signer role" /></label>
+            <label>Deposit (<span id="token-sym">USDC</span>, locked for <span id="watch-days">?</span> days after reveal)<input id="deposit" type="number" step="1" /></label>
+            <label class="check"><input type="checkbox" id="nda-agree" /> I accept this NDA. My Stellar signature is my signature.</label>
+            <button id="send-request" class="primary">Sign NDA &amp; lock deposit</button>
+          </div>
+        </div>
+        <div class="box nda">
+          <h2>The NDA you're signing</h2>
+          <pre id="nda-preview"></pre>
+          <p class="tiny mono">sha256 <span id="nda-hash"></span></p>
+          <p class="muted tiny">This hash goes on-chain inside the transaction you sign. Change one character and the hash changes.</p>
+        </div>
+      </div>
+      <h2 class="section-title">Your requests</h2>
+      <div id="outbox" class="cards"><p class="muted">Connect your wallet to see your requests.</p></div>
+    </section>
+
+    <!-- AUDIT -->
+    <section class="panel" id="audit" hidden>
+      <div class="box">
+        <h2>Everything, on-chain</h2>
+        <p class="muted">Every request, NDA hash, reveal and dispute is recorded by the <a id="contract-link" class="link" target="_blank" rel="noopener">Unveil contract ↗</a>. No names, no photos: just who asked whom, under which agreement, and when.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>ID</th><th>Status</th><th>Requester</th><th>Anon</th><th>Deposit</th><th>NDA hash</th><th>Asked</th><th>Revealed</th></tr></thead>
+            <tbody id="audit-rows"><tr><td colspan="8" class="muted">Loading…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ARBITER -->
+    <section class="panel" id="arbiter" hidden>
+      <h2 class="section-title">Open disputes</h2>
+      <div id="disputes" class="cards"></div>
+    </section>
+  </main>
+
+  <dialog id="modal">
+    <header><h2 id="modal-title">Reveal</h2><button id="modal-close" aria-label="Close">✕</button></header>
+    <div id="peephole"></div>
+    <p class="tiny muted">You see one small circle at a time, stamped with your name and wallet. Closing this window or switching tabs hides it.</p>
+  </dialog>
+
+  <div id="toasts" aria-live="polite"></div>
+  <footer>Built for Find Your Way · Stellar.</footer>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
