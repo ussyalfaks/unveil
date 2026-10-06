@@ -1,0 +1,9 @@
+target/
+node_modules/
+web/dist/
+web/data/
+web/.env
+.stellar/
+test_snapshots/
+.kilo/
+package-lock.json
