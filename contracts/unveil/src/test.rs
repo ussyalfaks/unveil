@@ -204,3 +204,41 @@ fn guards() {
     );
     let _ = &t.admin;
 }
+
+#[test]
+fn admin_sets_arbiter_key() {
+    let t = setup();
+    assert!(t.c.config().arbiter_key.is_empty());
+    t.c.set_arbiter_key(&key(&t.env));
+    // Only the admin's signature was asked for.
+    let auths = t.env.auths();
+    assert_eq!(auths.len(), 1);
+    assert_eq!(auths[0].0, t.admin);
+    assert_eq!(t.c.config().arbiter_key, key(&t.env));
+}
+
+#[test]
+fn arbiter_key_must_be_uncompressed_p256() {
+    let t = setup();
+    assert_eq!(
+        t.c.try_set_arbiter_key(&Bytes::from_array(&t.env, &[4u8; 33])),
+        Err(Ok(e(Error::BadKey)))
+    );
+    let mut wrong_prefix = [7u8; 65];
+    wrong_prefix[0] = 2;
+    assert_eq!(
+        t.c.try_set_arbiter_key(&Bytes::from_array(&t.env, &wrong_prefix)),
+        Err(Ok(e(Error::BadKey)))
+    );
+}
+
+#[test]
+#[should_panic]
+fn only_admin_sets_arbiter_key() {
+    let env = Env::default();
+    let admin = Address::generate(&env);
+    let sac = env.register_stellar_asset_contract_v2(admin.clone());
+    let id = env.register(Unveil, (admin, sac.address(), MIN, WATCH));
+    // No auth mocked: the admin hasn't signed, so this must fail.
+    UnveilClient::new(&env, &id).set_arbiter_key(&key(&env));
+}

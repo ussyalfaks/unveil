@@ -97,6 +97,9 @@ pub struct Config {
     pub min_deposit: i128,
     /// How long the deposit stays locked after a reveal (seconds).
     pub watch_secs: u64,
+    /// Arbiter's P-256 public key (65-byte uncompressed). Leak evidence is
+    /// encrypted to it. Empty until the admin sets it.
+    pub arbiter_key: Bytes,
 }
 
 #[contracttype]
@@ -178,6 +181,13 @@ fn pay(env: &Env, to: &Address, amount: i128) {
     token::TokenClient::new(env, &c.token).transfer(&env.current_contract_address(), to, &amount);
 }
 
+fn check_key(env: &Env, key: &Bytes) {
+    // Uncompressed P-256 point: 0x04 || X || Y
+    if key.len() != 65 || key.get(0) != Some(4) {
+        panic_with_error!(env, Error::BadKey);
+    }
+}
+
 fn expect(env: &Env, r: &Request, s: Status) {
     if r.status != s {
         panic_with_error!(env, Error::WrongStatus);
@@ -194,6 +204,7 @@ impl Unveil {
                 token,
                 min_deposit,
                 watch_secs,
+                arbiter_key: Bytes::new(&env),
             },
         );
         env.storage().instance().set(&Key::NextId, &0u64);
@@ -295,10 +306,7 @@ impl Unveil {
         if deposit < c.min_deposit {
             panic_with_error!(&env, Error::DepositTooSmall);
         }
-        // Uncompressed P-256 point: 0x04 || X || Y
-        if requester_key.len() != 65 || requester_key.get(0) != Some(4) {
-            panic_with_error!(&env, Error::BadKey);
-        }
+        check_key(&env, &requester_key);
         token::TokenClient::new(&env, &c.token).transfer(
             &requester,
             &env.current_contract_address(),
@@ -364,6 +372,16 @@ impl Unveil {
     }
 
     // ---------- arbiter ----------
+
+    /// Publish the key that leak evidence is encrypted to. Kept on-chain so
+    /// the storage server can't swap in its own key.
+    pub fn set_arbiter_key(env: Env, key: Bytes) {
+        let mut c = cfg(&env);
+        c.admin.require_auth();
+        check_key(&env, &key);
+        c.arbiter_key = key;
+        env.storage().instance().set(&Key::Config, &c);
+    }
 
     /// Decide a leak report. `leaked = true` pays the deposit to the anon.
     pub fn resolve(env: Env, id: u64, leaked: bool) {
