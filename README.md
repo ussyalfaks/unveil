@@ -16,18 +16,19 @@ Today an anon has two bad options: stay anonymous and never be trusted, or send 
 
 | Step | Who | What happens | Where |
 |---|---|---|---|
-| 1 | Anon | Takes a **live** photo. Their wallet and the time are burned into the pixels. It's encrypted in the browser with a key derived from their wallet signature. | Browser |
+| 1 | Anon | Takes a **live** photo. Their wallet and the time are burned into the pixels. Optionally adds their **real name**, which is packed with the photo. Both are encrypted in the browser with a key derived from their wallet signature. | Browser |
 | 2 | Anon | Registers the **hash** of the encrypted photo and the capture time. | Stellar |
 | 3 | Requester | Writes and signs an NDA. Its SHA-256 goes into the same transaction that **locks the deposit**. Their Stellar signature is their signature on the NDA. | Stellar |
 | 4 | Anon | Reads the exact NDA, then approves: the photo key is encrypted to the requester's public key (ECDH P-256) and posted. Or declines, and the deposit is refunded. | Stellar |
-| 5 | Requester | Decrypts and views the photo through a **peephole**: one small circle at a time, every visible pixel stamped with their name, wallet and reveal number. | Browser |
-| 6 | Both | **Watch window** (e.g. 7 days). No leak reported → requester withdraws. Anon reports a leak → arbiter checks the watermark → deposit paid to the anon. | Stellar |
+| 5 | Requester | Decrypts and views the photo through a **peephole**: one small circle at a time, every visible pixel stamped with their name, wallet and reveal number. The anon's real name, if shared, is shown above it. | Browser |
+| 6 | Both | **Watch window** (e.g. 7 days). No leak reported → requester withdraws. Anon reports a leak by uploading the leaked image, **encrypted so only the arbiter can open it**; its hash goes on-chain → arbiter checks the watermark → deposit paid to the anon. | Stellar |
 
 What each party can see:
 
-- **Stellar:** wallets, NDA hash, photo hash, deposit, timestamps, and the photo key encrypted to one requester. No names, no photos.
-- **Storage server:** encrypted photo blobs and NDA texts, each stored under its SHA-256. It can't read the photos, and it can't swap one without the on-chain hash exposing it.
-- **Requester:** the photo, through the peephole, with their own identity all over it.
+- **Stellar:** wallets, NDA hash, photo hash, evidence hash, deposit, timestamps, the photo key encrypted to one requester, and the arbiter's public key. No names, no photos.
+- **Storage server:** encrypted photo blobs, encrypted leak evidence and NDA texts, each stored under its SHA-256. It can't read the photos, names or evidence, and it can't swap a file without the on-chain hash exposing it. The arbiter's key lives on-chain, so the server can't swap that either.
+- **Arbiter:** only the leak evidence for open disputes.
+- **Requester:** the photo, through the peephole, with their own identity all over it, plus the real name if the anon shared one.
 
 ## Why Stellar
 
@@ -45,7 +46,7 @@ scripts/deploy.sh   build + deploy to testnet, writes web/.env
 
 ## Run it
 
-You need Rust, Node 20+, the [Stellar CLI](https://developers.stellar.org/docs/tools/cli/install-cli), and the [Freighter](https://freighter.app) wallet set to **Testnet**.
+You need Rust 1.91+, Node 20+, the [Stellar CLI](https://developers.stellar.org/docs/tools/cli/install-cli) 25.2+, and the [Freighter](https://freighter.app) wallet set to **Testnet**.
 
 ```bash
 rustup target add wasm32v1-none
@@ -72,12 +73,13 @@ The camera needs `localhost` or HTTPS. To deploy publicly, host `web/` on any No
 
 You need two Freighter accounts (Anon and Requester), both funded from friendbot.
 
-1. **Anon:** connect, start the camera, take a photo, *Encrypt & register*. Show the profile: photo hash, "registered 9s after capture". Copy the address.
+0. **Arbiter (once per deploy):** import the arbiter key into Freighter (`stellar keys show unveil-admin`), connect, open the *Arbiter* tab, *Set up arbiter key*.
+1. **Anon:** connect, start the camera, take a photo, optionally type a real name, *Encrypt & register*. Show the profile: photo hash, "registered 9s after capture". Copy the address.
 2. **Requester:** paste the address, *Look up*: "live photo on file, taken 1 min ago". Fill in the NDA, watch the hash change as you type, tick the box, *Sign NDA & lock deposit*.
 3. **Anon:** the request appears with the requester's name and the full NDA text. *Approve & reveal.*
-4. **Requester:** *View identity*. Move over the frame: one circle at a time, with their own name and wallet stamped across it.
+4. **Requester:** *View identity*. The anon's real name sits above the frame. Move over the frame: one circle at a time, with their own name and wallet stamped across it.
 5. **Audit trail tab:** the whole history, with no personal data in it.
-6. Either wait out the 5-minute window and *Withdraw deposit*, or have the anon *Report a leak* and resolve it from the arbiter account (import its key into Freighter with `stellar keys show unveil-admin`).
+6. Either wait out the 5-minute window and *Withdraw deposit*, or have the anon *Report a leak* with a screenshot of the peephole. From the arbiter account, *View evidence* to read the watermark, then resolve it.
 
 ## Contract API
 
@@ -90,6 +92,7 @@ You need two Freighter accounts (Anon and Requester), both funded from friendbot
 | `decline(anon, id)` | anon | Refund. |
 | `report_leak(anon, id, evidence_hash)` | anon | Inside the window only; freezes the deposit. |
 | `release(requester, id)` | requester | After the window; refund. |
+| `set_arbiter_key(key)` | arbiter | Publish the P-256 public key that leak evidence is encrypted to. |
 | `resolve(id, leaked)` | arbiter | Pay the anon (leak proven) or refund the requester. |
 | `get_profile`, `get_request`, `request_count`, `config` | anyone | Reads. |
 
@@ -98,6 +101,7 @@ Statuses: `Pending → Revealed → Released` · `Pending → Declined | Cancell
 ## Honest limits
 
 - **The peephole raises the effort; it doesn't make copying impossible.** Once decrypted, the photo is in the requester's browser memory, and someone with developer tools can extract it. The deterrent is that any copy carries their watermark, and the deposit makes leaking expensive.
+- **The real name can't be watermarked.** It's shown as text, so a requester can copy it without a trace. The deposit is the only deterrent.
 - **Disputes have one arbiter** (the deployer). Next step: a multisig or a jury of staked arbiters.
 - **Freshness relies on the anon's clock plus ledger time.** The contract rejects future timestamps, and the app shows how long after capture the photo reached the chain. A stronger version would bind the photo to a recent ledger hash shown on screen at capture.
 - **Liveness is "a camera took this now", not face matching.** Pairing it with a passport-based ZK proof (for example with Stellar's BN254 and Poseidon primitives from Protocol 25) would prove the face belongs to a real document holder.
