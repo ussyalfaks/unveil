@@ -22,4 +22,20 @@ await assert.rejects(c.unwrapKey(wrapped, other));
 const bad = blob.slice(); bad[40] ^= 1;
 await assert.rejects(c.decryptPhoto(K, bad));
 assert.deepEqual(c.signatureBytes(btoa(String.fromCharCode(...anonSig))), anonSig);
+// profile bundle: name + photo travel together under one hash
+const packed = c.packProfile('  Ada Lovelace  ', photo);
+assert.deepEqual(c.unpackProfile(packed), { name: 'Ada Lovelace', jpeg: photo });
+assert.deepEqual(c.unpackProfile(c.packProfile('', photo)), { name: '', jpeg: photo });
+assert.equal(c.unpackProfile(c.packProfile('Zoë 李', photo)).name, 'Zoë 李');
+assert.throws(() => c.packProfile('x'.repeat(81), photo), /80/);
+assert.throws(() => c.unpackProfile(photo), /format/);
+// arbiter key: same derivation scheme, different label, so different key
+const arbSecret = c.arbiterSecretFromSignature(reqSig);
+assert.notDeepEqual(arbSecret, reqSecret);
+assert.deepEqual(c.arbiterSecretFromSignature(reqSig), arbSecret, 'arbiter key deterministic');
+// evidence: only the arbiter can open it
+const leak = crypto.getRandomValues(new Uint8Array(30000));
+const sealedEv = await c.sealEvidence(c.publicKeyOf(arbSecret), leak);
+assert.deepEqual(await c.openEvidence(sealedEv, arbSecret), leak);
+await assert.rejects(c.openEvidence(sealedEv, reqSecret));
 console.log('crypto: all checks passed');
