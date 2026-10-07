@@ -50,6 +50,7 @@
             <canvas id="shot" hidden></canvas>
             <div class="cam-empty">camera off</div>
           </div>
+          <label>Real name (optional, shown only to requesters you approve)<input id="real-name" maxlength="80" autocomplete="off" placeholder="Leave empty to reveal your photo only" /></label>
           <div class="actions">
             <button id="cam-start">Start camera</button>
             <button id="cam-snap" disabled>Take photo</button>
@@ -110,6 +111,11 @@
 
     <!-- ARBITER -->
     <section class="panel" id="arbiter" hidden>
+      <div class="box">
+        <h2>Evidence key</h2>
+        <p class="muted" id="arbiter-key-status">Loading…</p>
+        <div class="actions"><button id="arbiter-key-setup" class="primary" hidden>Set up arbiter key</button></div>
+      </div>
       <h2 class="section-title">Open disputes</h2>
       <div id="disputes" class="cards"></div>
     </section>
@@ -117,8 +123,15 @@
 
   <dialog id="modal">
     <header><h2 id="modal-title">Reveal</h2><button id="modal-close" aria-label="Close">✕</button></header>
+    <p id="reveal-name" class="reveal-name"></p>
     <div id="peephole"></div>
     <p class="tiny muted">You see one small circle at a time, stamped with your name and wallet. Closing this window or switching tabs hides it.</p>
+  </dialog>
+
+  <dialog id="evidence-modal" class="wide">
+    <header><h2 id="evidence-title">Evidence</h2><button id="evidence-close" aria-label="Close">✕</button></header>
+    <img id="evidence-img" alt="Leaked image submitted as evidence" />
+    <p class="tiny muted">Check the watermark: it names the viewer's wallet and the reveal number. The file's hash matches the one the anon put on-chain.</p>
   </dialog>
 
   <div id="toasts" aria-live="polite"></div>

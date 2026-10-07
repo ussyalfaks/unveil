@@ -81,7 +81,7 @@ function normRequest(r) {
 export const api = {
   config: async () => {
     const c = await read('config');
-    return { ...c, min_deposit: BigInt(c.min_deposit), watch_secs: Number(c.watch_secs) };
+    return { ...c, min_deposit: BigInt(c.min_deposit), watch_secs: Number(c.watch_secs), arbiter_key: new Uint8Array(c.arbiter_key) };
   },
   getProfile: async (anon) => {
     const p = await read('get_profile', { anon });
@@ -114,9 +114,10 @@ export const api = {
   reportLeak: (id, evidenceHash) =>
     write('report_leak', { anon: address, id: BigInt(id), evidence_hash: buf(evidenceHash) }),
   resolve: (id, leaked) => write('resolve', { id: BigInt(id), leaked }),
+  setArbiterKey: (key) => write('set_arbiter_key', { key: buf(key) }),
 };
 
-// ---- encrypted photo storage (ciphertext only, content-addressed) ----
+// ---- encrypted storage for photos and evidence (ciphertext only, content-addressed) ----
 export async function uploadBlob(bytes) {
   const r = await fetch('/api/blob', { method: 'POST', body: bytes, headers: { 'content-type': 'application/octet-stream' } });
   if (!r.ok) throw new Error('Upload failed: ' + (await r.text()));
@@ -125,6 +126,6 @@ export async function uploadBlob(bytes) {
 
 export async function downloadBlob(hex) {
   const r = await fetch('/api/blob/' + hex);
-  if (!r.ok) throw new Error('Encrypted photo not found on the server');
+  if (!r.ok) throw new Error('Encrypted file not found on the server');
   return new Uint8Array(await r.arrayBuffer());
 }

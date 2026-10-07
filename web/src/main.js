@@ -134,9 +134,10 @@ $('#register').addEventListener('click', (e) =>
     if (!snapped) throw new Error('Take a photo first');
     // Only a live, recent capture counts.
     if (Date.now() / 1000 - snapped.capturedAt > 600) throw new Error('Photo is older than 10 minutes. Take a fresh one.');
+    const bundle = C.packProfile($('#real-name').value, snapped.bytes);
     toast('Sign the message in Freighter to derive your photo key (no funds move).');
     const K = C.photoKeyFromSignature(await signMessage(C.PHOTO_KEY_MESSAGE(me())));
-    const sealed = await C.encryptPhoto(K, snapped.bytes);
+    const sealed = await C.encryptPhoto(K, bundle);
     const hex = await uploadBlob(sealed);
     if (hex !== C.toHex(C.sha256Bytes(sealed))) throw new Error('Server returned the wrong hash');
     toast('Encrypted photo stored. Now confirm the Stellar transaction.');
@@ -222,20 +223,39 @@ async function renderInbox() {
       );
     }
     if (r.status === 'Revealed' && Date.now() / 1000 < watchEnd) {
-      actions.append(
-        button('Report a leak', 'danger', (b) =>
-          busy(b, 'Reporting…', async () => {
-            const ev = prompt('Paste a link to, or a description of, the leaked image. Its hash goes on-chain as evidence; keep the original to show the arbiter.');
-            if (!ev) return;
-            await api.reportLeak(r.id, C.sha256Bytes(enc.encode(ev)));
-            toast('Leak reported. The deposit is frozen until the arbiter decides.', 'ok');
-            renderInbox();
-          }),
-        ),
+      const report = button('Report a leak', 'danger', (b) =>
+        busy(b, 'Reporting…', async () => {
+          const file = await pickFile('image/*');
+          if (!file) return;
+          if (file.size > MAX_EVIDENCE) throw new Error('Image is too large (max 2.9 MB). Crop or compress it.');
+          const sealed = await C.sealEvidence(cfg.arbiter_key, new Uint8Array(await file.arrayBuffer()));
+          const hex = await uploadBlob(sealed);
+          if (hex !== C.toHex(C.sha256Bytes(sealed))) throw new Error('Server returned the wrong hash');
+          toast('Evidence encrypted for the arbiter and stored. Now confirm the Stellar transaction.');
+          await api.reportLeak(r.id, C.sha256Bytes(sealed));
+          toast('Leak reported. The deposit is frozen until the arbiter decides.', 'ok');
+          renderInbox();
+        }),
       );
+      actions.append(report);
+      if (!cfg.arbiter_key.length) {
+        report.disabled = true;
+        actions.insertAdjacentHTML('afterend', '<p class="warn tiny">The arbiter hasn\'t set up an evidence key yet, so leak reports can\'t be encrypted. Ask them to open the Arbiter tab.</p>');
+      }
     }
     el.append(card);
   }
+}
+
+const MAX_EVIDENCE = 2.9 * 1024 * 1024; // the server takes 3 MB; leave room for encryption overhead
+
+function pickFile(accept) {
+  return new Promise((resolve) => {
+    const input = Object.assign(document.createElement('input'), { type: 'file', accept });
+    input.addEventListener('change', () => resolve(input.files[0] || null));
+    input.addEventListener('cancel', () => resolve(null));
+    input.click();
+  });
 }
 
 function button(label, cls, onClick) {
@@ -355,10 +375,12 @@ async function view(r) {
   const profile = await api.getProfile(r.anon);
   const sealed = await downloadBlob(C.toHex(profile.photo_hash));
   if (C.toHex(C.sha256Bytes(sealed)) !== C.toHex(profile.photo_hash)) throw new Error('Photo does not match the on-chain commitment');
-  const jpeg = await C.decryptPhoto(K, sealed);
+  const { name: realName, jpeg } = C.unpackProfile(await C.decryptPhoto(K, sealed));
   const name = ndaName(await fetchNda(r.nda_hash));
   const stamp = `${name}\n${short(me())} · #${r.id}\n${new Date().toISOString().slice(0, 16)}Z`;
   $('#modal-title').textContent = `Reveal #${r.id} · anon ${short(r.anon)}`;
+  $('#reveal-name').textContent = realName ? `Real name: ${realName}` : 'No real name shared, photo only.';
+  $('#reveal-name').classList.toggle('none', !realName);
   $('#modal').showModal();
   closePeep = await openPeephole($('#peephole'), jpeg, stamp);
 }
@@ -368,9 +390,43 @@ $('#modal').addEventListener('close', () => { closePeep?.(); closePeep = null; }
 // ======================================================
 // ARBITER + AUDIT
 // ======================================================
+$('#arbiter-key-setup').addEventListener('click', (e) =>
+  busy(e.target, 'Setting up…', async () => {
+    toast('Sign to derive your arbiter key (no funds move).');
+    const secret = C.arbiterSecretFromSignature(await signMessage(C.ARBITER_KEY_MESSAGE(me())));
+    toast('Now confirm the transaction that publishes the public half on-chain.');
+    await api.setArbiterKey(C.publicKeyOf(secret));
+    cfg = await api.config();
+    toast('Arbiter key set. Anons can now submit encrypted evidence.', 'ok');
+    renderArbiter();
+  }),
+);
+
+async function viewEvidence(r) {
+  const sealed = await downloadBlob(C.toHex(r.evidence_hash));
+  if (C.toHex(C.sha256Bytes(sealed)) !== C.toHex(r.evidence_hash)) throw new Error('Evidence does not match the on-chain hash');
+  toast('Sign to derive your arbiter key (no funds move).');
+  const secret = C.arbiterSecretFromSignature(await signMessage(C.ARBITER_KEY_MESSAGE(me())));
+  const img = await C.openEvidence(sealed, secret);
+  const url = URL.createObjectURL(new Blob([img]));
+  $('#evidence-img').src = url;
+  $('#evidence-title').textContent = `Evidence for #${r.id}`;
+  $('#evidence-modal').showModal();
+}
+$('#evidence-close').addEventListener('click', () => $('#evidence-modal').close());
+$('#evidence-modal').addEventListener('close', () => {
+  URL.revokeObjectURL($('#evidence-img').src);
+  $('#evidence-img').removeAttribute('src');
+});
+
 async function renderArbiter() {
   const el = $('#disputes');
   if (!cfg || me() !== cfg.admin) return;
+  const hasKey = cfg.arbiter_key.length > 0;
+  $('#arbiter-key-status').textContent = hasKey
+    ? 'Set. Leak evidence is encrypted to your key, and only you can open it.'
+    : 'Not set. Until you set it, anons can\'t submit leak evidence. One signature derives it; the public half is stored on-chain.';
+  $('#arbiter-key-setup').hidden = hasKey;
   const open = (await api.allRequests()).filter((r) => r.status === 'Disputed');
   el.innerHTML = open.length ? '' : '<p class="muted">No open disputes.</p>';
   for (const r of open) {
@@ -383,6 +439,7 @@ async function renderArbiter() {
       <p class="muted">Check the leaked image's watermark: it names the viewer's wallet and reveal number.</p>
       <div class="actions"></div>`;
     $('.actions', card).append(
+      button('View evidence', 'primary', (b) => busy(b, 'Decrypting…', () => viewEvidence(r))),
       button('Leak proven: pay anon', 'danger', (b) => busy(b, 'Resolving…', async () => { await api.resolve(r.id, true); toast('Deposit paid to anon', 'ok'); renderArbiter(); })),
       button('Not proven: refund', '', (b) => busy(b, 'Resolving…', async () => { await api.resolve(r.id, false); toast('Deposit refunded', 'ok'); renderArbiter(); })),
     );
