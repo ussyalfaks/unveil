@@ -17,13 +17,38 @@ export async function connect() {
   if (!conn || !conn.isConnected) throw new Error('Freighter wallet not found. Install it from freighter.app and switch it to Testnet.');
   const { address: a } = check(await freighter.requestAccess());
   address = a;
+  remember(true);
   return a;
+}
+
+// Freighter can't revoke a site's access, so "disconnect" is ours: forget the
+// wallet and don't silently reconnect on the next load.
+const FLAG = 'unveil:disconnected';
+function remember(on) {
+  try {
+    on ? localStorage.removeItem(FLAG) : localStorage.setItem(FLAG, '1');
+  } catch {}
+}
+function disconnectedByUser() {
+  try {
+    return localStorage.getItem(FLAG) === '1';
+  } catch {
+    return false;
+  }
+}
+
+export function disconnect() {
+  address = null;
+  watcher?.stop();
+  watcher = null;
+  clients.clear();
+  remember(false);
 }
 
 /** Reconnect without a prompt if Freighter already allowed this site. */
 export async function restore() {
   try {
-    if (!(await freighter.isAllowed())?.isAllowed) return null;
+    if (disconnectedByUser() || !(await freighter.isAllowed())?.isAllowed) return null;
     const { address: a } = await freighter.getAddress();
     address = a || null;
     return address;

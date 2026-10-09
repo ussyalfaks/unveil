@@ -55,7 +55,15 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
 button.primary:hover:not(:disabled) { background: #ff5f3a; }
 button.danger { border-color: var(--accent); color: var(--accent); }
-#connect.connected { background: var(--ink-3); color: var(--bone); border-color: var(--line); font-family: var(--mono); }
+.wallet { display: flex; align-items: center; gap: 8px; }
+.wallet-addr { font: 500 13px var(--mono); color: var(--bone); background: var(--ink-3); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; }
+.power { display: inline-flex; align-items: center; gap: 8px; }
+.power svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; }
+.power.on { color: var(--ok); border-color: #2f4a2d; padding: 9px 10px; }
+.power.on .label { display: none; }
+.power.on:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
+.power.busy svg { animation: pulse 1s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .3; } }
 .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
 
 label { display: block; font-size: 13px; color: var(--bone-2); margin-top: 14px; }
@@ -117,7 +125,8 @@ footer { padding: 24px clamp(16px, 4vw, 48px); border-top: 1px solid var(--line)
 
 @media (max-width: 520px) {
   .net { display: none; }
-  #connect { padding: 8px 12px; font-size: 13px; }
+  #connect { padding: 8px 10px; font-size: 13px; }
+  .wallet-addr { padding: 7px 10px; font-size: 12px; }
   .flow { grid-template-columns: 1fr; gap: 6px; }
   .flow li { padding: 8px 12px; }
   .flow b { display: inline; margin-right: 6px; }

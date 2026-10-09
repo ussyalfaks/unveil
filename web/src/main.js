@@ -3,7 +3,7 @@ globalThis.Buffer = Buffer;
 
 import './style.css';
 import { CONFIG } from './config.js';
-import { connect, restore, onAccountChange, me, api, signMessage, uploadBlob, downloadBlob } from './chain.js';
+import { connect, disconnect, restore, onAccountChange, me, api, signMessage, uploadBlob, downloadBlob } from './chain.js';
 import * as C from './crypto.js';
 import { openPeephole } from './peephole.js';
 
@@ -60,10 +60,20 @@ document.querySelectorAll('[data-tab]').forEach((b) =>
 );
 
 // ---------- wallet ----------
+function setPower(on, a) {
+  const btn = $('#connect');
+  btn.classList.toggle('on', on);
+  btn.classList.toggle('primary', !on);
+  const label = on ? 'Disconnect wallet' : 'Connect wallet';
+  btn.title = label;
+  btn.setAttribute('aria-label', label);
+  $('#wallet-addr').hidden = !on;
+  $('#wallet-addr').textContent = on ? short(a) : '';
+  $('#wallet-addr').title = on ? a : '';
+}
+
 async function showWallet(a) {
-  $('#connect').textContent = short(a);
-  $('#connect').title = a;
-  $('#connect').classList.add('connected');
+  setPower(true, a);
   document.body.classList.add('has-wallet');
   onAccountChange((next) => {
     toast(`Switched to ${short(next)}`);
@@ -72,7 +82,37 @@ async function showWallet(a) {
   await refreshAll();
 }
 
-$('#connect').addEventListener('click', (e) => busy(e.target, 'Connecting…', async () => showWallet(await connect())));
+function showDisconnected() {
+  setPower(false);
+  document.body.classList.remove('has-wallet');
+  $('#my-profile').innerHTML = '<p class="muted">Connect your wallet to see your profile.</p>';
+  $('#inbox').innerHTML = '<p class="muted">Connect your wallet to see requests.</p>';
+  $('#outbox').innerHTML = '<p class="muted">Connect your wallet to see your requests.</p>';
+  $('#disputes').innerHTML = '';
+  $('#arbiter-tab').hidden = true;
+  if ($('#arbiter-tab').getAttribute('aria-selected') === 'true') $('[data-tab="anon"]').click();
+}
+
+$('#connect').addEventListener('click', async () => {
+  const btn = $('#connect');
+  if (me()) {
+    disconnect();
+    showDisconnected();
+    toast('Wallet disconnected');
+    return;
+  }
+  btn.disabled = true;
+  btn.classList.add('busy');
+  try {
+    await showWallet(await connect());
+  } catch (e) {
+    console.error(e);
+    toast(e.message || String(e), 'error');
+  } finally {
+    btn.disabled = false;
+    btn.classList.remove('busy');
+  }
+});
 restore().then((a) => a && showWallet(a));
 
 async function refreshAll() {
