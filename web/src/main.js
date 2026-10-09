@@ -3,7 +3,7 @@ globalThis.Buffer = Buffer;
 
 import './style.css';
 import { CONFIG } from './config.js';
-import { connect, me, api, signMessage, uploadBlob, downloadBlob } from './chain.js';
+import { connect, restore, onAccountChange, me, api, signMessage, uploadBlob, downloadBlob } from './chain.js';
 import * as C from './crypto.js';
 import { openPeephole } from './peephole.js';
 
@@ -45,7 +45,8 @@ async function busy(btn, label, fn) {
     toast(e.message || String(e), 'error');
   } finally {
     btn.disabled = false;
-    btn.textContent = old;
+    // Only undo our own label; the task may have set new text (e.g. the wallet address).
+    if (btn.textContent === label) btn.textContent = old;
   }
 }
 
@@ -59,15 +60,20 @@ document.querySelectorAll('[data-tab]').forEach((b) =>
 );
 
 // ---------- wallet ----------
-$('#connect').addEventListener('click', (e) =>
-  busy(e.target, 'Connecting…', async () => {
-    const a = await connect();
-    $('#connect').textContent = short(a);
-    $('#connect').classList.add('connected');
-    document.body.classList.add('has-wallet');
-    await refreshAll();
-  }),
-);
+async function showWallet(a) {
+  $('#connect').textContent = short(a);
+  $('#connect').title = a;
+  $('#connect').classList.add('connected');
+  document.body.classList.add('has-wallet');
+  onAccountChange((next) => {
+    toast(`Switched to ${short(next)}`);
+    showWallet(next);
+  });
+  await refreshAll();
+}
+
+$('#connect').addEventListener('click', (e) => busy(e.target, 'Connecting…', async () => showWallet(await connect())));
+restore().then((a) => a && showWallet(a));
 
 async function refreshAll() {
   try {
@@ -76,6 +82,7 @@ async function refreshAll() {
     $('#deposit').min = $('#deposit').value;
     $('#watch-days').textContent = Math.round(cfg.watch_secs / 86400);
     $('#arbiter-tab').hidden = me() !== cfg.admin;
+    if ($('#arbiter-tab').hidden && $('#arbiter-tab').getAttribute('aria-selected') === 'true') $('[data-tab="anon"]').click();
   } catch (e) {
     toast(e.message, 'error');
     return;

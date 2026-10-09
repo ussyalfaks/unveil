@@ -20,6 +20,31 @@ export async function connect() {
   return a;
 }
 
+/** Reconnect without a prompt if Freighter already allowed this site. */
+export async function restore() {
+  try {
+    if (!(await freighter.isAllowed())?.isAllowed) return null;
+    const { address: a } = await freighter.getAddress();
+    address = a || null;
+    return address;
+  } catch {
+    return null;
+  }
+}
+
+/** Call `cb(address)` whenever the user switches account in Freighter. */
+let watcher = null;
+export function onAccountChange(cb) {
+  if (watcher) return;
+  watcher = new freighter.WatchWalletChanges(1500);
+  watcher.watch(({ address: a }) => {
+    if (a && a !== address) {
+      address = a;
+      cb(a);
+    }
+  });
+}
+
 export const me = () => address;
 
 async function client(withSigner) {
