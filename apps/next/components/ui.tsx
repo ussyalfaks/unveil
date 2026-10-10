@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, type DependencyList } from 'react';
-import type { Status } from '@unveil/sdk';
+import type { Status } from 'unveil-sdk';
 import { errorMessage } from '@/lib/format';
 import { useUnveil } from './UnveilProvider';
 

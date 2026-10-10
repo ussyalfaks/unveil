@@ -40,7 +40,7 @@ What each party can see:
 
 ```
 contracts/unveil/   Soroban contract (Rust) + tests
-packages/sdk/       @unveil/sdk: TypeScript SDK (encryption, contract client, wallets, peephole)
+packages/sdk/       unveil-sdk: TypeScript SDK (encryption, contract client, wallets, peephole)
 apps/next/          Next.js + TypeScript app built on the SDK
 web/                original Vite app (plain JS)
 scripts/deploy.sh   build + deploy to testnet, writes web/.env and apps/next/.env.local

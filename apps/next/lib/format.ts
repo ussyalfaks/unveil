@@ -1,4 +1,4 @@
-import { fromUnits } from '@unveil/sdk';
+import { fromUnits } from 'unveil-sdk';
 import { TOKEN_SYMBOL } from './config';
 
 export const short = (a?: string | null) => (a ? `${a.slice(0, 4)}…${a.slice(-4)}` : '');

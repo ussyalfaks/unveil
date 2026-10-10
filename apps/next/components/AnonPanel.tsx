@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { crypto as C, ndaRecipient } from '@unveil/sdk';
-import { capturePhoto, startCamera, stopCamera, type CapturedPhoto } from '@unveil/sdk/browser';
+import { crypto as C, ndaRecipient } from 'unveil-sdk';
+import { capturePhoto, startCamera, stopCamera, type CapturedPhoto } from 'unveil-sdk/browser';
 import { EXPLORER } from '@/lib/config';
 import { ago, fmtAmt, short, when } from '@/lib/format';
 import { ActionButton, CopyButton, StatusPill, pickFile, useLoad } from './ui';

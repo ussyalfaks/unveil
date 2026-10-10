@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { buildNda, crypto as C, fromUnits, ndaRecipient, toUnits, type Profile, type RevealRequest } from '@unveil/sdk';
-import { openPeephole } from '@unveil/sdk/browser';
+import { buildNda, crypto as C, fromUnits, ndaRecipient, toUnits, type Profile, type RevealRequest } from 'unveil-sdk';
+import { openPeephole } from 'unveil-sdk/browser';
 import { TOKEN_SYMBOL } from '@/lib/config';
 import { ago, fmtAmt, period, short, when } from '@/lib/format';
 import { ActionButton, StatusPill, downloadText, useLoad } from './ui';

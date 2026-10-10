@@ -1,6 +1,6 @@
 # Unveil (Next.js)
 
-The Unveil app rebuilt with Next.js and TypeScript on top of [`@unveil/sdk`](../../packages/sdk). Same screens and flow as the original `web/` app. All encryption and contract logic lives in the SDK; this app is only UI plus a small storage API.
+The Unveil app rebuilt with Next.js and TypeScript on top of [`unveil-sdk`](../../packages/sdk). Same screens and flow as the original `web/` app. All encryption and contract logic lives in the SDK; this app is only UI plus a small storage API.
 
 ## Run it
 

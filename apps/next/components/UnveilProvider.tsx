@@ -1,8 +1,8 @@
 'use client';
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
-import { Unveil, httpStorage, type Config, type ProgressEvent } from '@unveil/sdk';
-import type { WalletsKit } from '@unveil/sdk/wallets-kit';
+import { Unveil, httpStorage, type Config, type ProgressEvent } from 'unveil-sdk';
+import type { WalletsKit } from 'unveil-sdk/wallets-kit';
 import { CONTRACT_ID, NETWORK } from '@/lib/config';
 import { errorMessage, short } from '@/lib/format';
 
@@ -95,7 +95,7 @@ export function UnveilProvider({ children }: { children: ReactNode }) {
       return;
     }
     (async () => {
-      const { createWalletsKit } = await import('@unveil/sdk/wallets-kit');
+      const { createWalletsKit } = await import('unveil-sdk/wallets-kit');
       const kit = createWalletsKit({ network: NETWORK, theme: KIT_THEME });
       kitRef.current = kit;
       setUnveil(

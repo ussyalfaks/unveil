@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { crypto as C } from '@unveil/sdk';
+import { crypto as C } from 'unveil-sdk';
 import { fmtAmt, short } from '@/lib/format';
 import { ActionButton, StatusPill, useLoad } from './ui';
 import { useUnveil } from './UnveilProvider';

@@ -9,7 +9,7 @@ export interface SignOptions {
  * Anything that can sign for a Stellar account. The wallet MUST sign messages
  * deterministically (plain ed25519 does): Unveil derives its encryption keys
  * from those signatures, so the same message has to give the same bytes every
- * time. See `createWalletsKit` in "@unveil/sdk/wallets-kit" for a ready-made
+ * time. See `createWalletsKit` in "unveil-sdk/wallets-kit" for a ready-made
  * adapter over Freighter, xBull, LOBSTR and Hana.
  */
 export interface WalletAdapter {

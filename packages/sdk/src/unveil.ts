@@ -47,7 +47,7 @@ export interface UnveilOptions {
 }
 
 export interface RegisterInput {
-  /** The stamped JPEG (see `capturePhoto` in "@unveil/sdk/browser"). */
+  /** The stamped JPEG (see `capturePhoto` in "unveil-sdk/browser"). */
   photo: Bytes;
   /** Unix seconds when the photo was taken. */
   capturedAt: number;

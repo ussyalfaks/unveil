@@ -1,9 +1,21 @@
 {
-  "name": "@unveil/sdk",
+  "name": "unveil-sdk",
   "version": "0.1.0",
   "description": "Controlled identity reveal on Stellar: encrypted live photos, NDA-backed deposits and watermarked viewing.",
+  "keywords": [
+    "stellar",
+    "soroban",
+    "identity",
+    "privacy",
+    "nda",
+    "encryption",
+    "web3"
+  ],
   "type": "module",
   "sideEffects": false,
+  "engines": {
+    "node": ">=20"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -24,7 +36,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "prepublishOnly": "npm run build && npm test"
   },
   "dependencies": {
     "@noble/curves": "^2.4.0",

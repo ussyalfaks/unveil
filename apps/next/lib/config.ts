@@ -1,4 +1,4 @@
-import { MAINNET, TESTNET, type NetworkConfig } from '@unveil/sdk';
+import { MAINNET, TESTNET, type NetworkConfig } from 'unveil-sdk';
 
 export const CONTRACT_ID = process.env.NEXT_PUBLIC_CONTRACT_ID ?? '';
 export const TOKEN_SYMBOL = process.env.NEXT_PUBLIC_TOKEN_SYMBOL ?? 'XLM';

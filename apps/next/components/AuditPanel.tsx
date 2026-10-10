@@ -1,6 +1,6 @@
 'use client';
 
-import { crypto as C } from '@unveil/sdk';
+import { crypto as C } from 'unveil-sdk';
 import { CONTRACT_ID, EXPLORER } from '@/lib/config';
 import { fmtAmt, short, when } from '@/lib/format';
 import { StatusPill, useLoad } from './ui';

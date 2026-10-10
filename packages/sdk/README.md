@@ -1,4 +1,4 @@
-# @unveil/sdk
+# unveil-sdk
 
 Add controlled identity reveal to any Stellar app. A pseudonymous user shows their live photo (and optionally their real name) to one party. That party signs an NDA and locks a deposit on-chain. Every view is watermarked with the viewer's identity, and a proven leak pays the deposit to the person who was exposed.
 
@@ -7,7 +7,7 @@ Everything is encrypted on the client. Storage only ever holds ciphertext, and t
 ## Install
 
 ```bash
-npm install @unveil/sdk
+npm install unveil-sdk
 # for the ready-made wallet picker (Freighter, xBull, LOBSTR, Hana):
 npm install @creit.tech/stellar-wallets-kit @stellar/freighter-api
 ```
@@ -15,9 +15,9 @@ npm install @creit.tech/stellar-wallets-kit @stellar/freighter-api
 ## Quick start
 
 ```ts
-import { Unveil, httpStorage, buildNda, toUnits, TESTNET } from '@unveil/sdk';
-import { createWalletsKit } from '@unveil/sdk/wallets-kit';
-import { startCamera, capturePhoto, openPeephole } from '@unveil/sdk/browser';
+import { Unveil, httpStorage, buildNda, toUnits, TESTNET } from 'unveil-sdk';
+import { createWalletsKit } from 'unveil-sdk/wallets-kit';
+import { startCamera, capturePhoto, openPeephole } from 'unveil-sdk/browser';
 
 const kit = createWalletsKit({ network: TESTNET });
 const unveil = new Unveil({
