@@ -1,40 +1,62 @@
 import { Buffer } from 'buffer';
 import { contract } from '@stellar/stellar-sdk';
-import * as freighter from '@stellar/freighter-api';
+import { WatchWalletChanges } from '@stellar/freighter-api';
+import { StellarWalletsKit } from '@creit.tech/stellar-wallets-kit/sdk';
+import { FreighterModule, FREIGHTER_ID } from '@creit.tech/stellar-wallets-kit/modules/freighter';
+import { xBullModule } from '@creit.tech/stellar-wallets-kit/modules/xbull';
+import { LobstrModule } from '@creit.tech/stellar-wallets-kit/modules/lobstr';
+import { HanaModule } from '@creit.tech/stellar-wallets-kit/modules/hana';
 import { CONFIG } from './config.js';
 import { signatureBytes } from './crypto.js';
 
 let address = null;
 const clients = new Map();
 
+// Only wallets that can sign plain messages: the app derives its encryption
+// keys from those signatures. (Albedo, Rabet and hardware wallets can't.)
+StellarWalletsKit.init({
+  modules: [new FreighterModule(), new xBullModule(), new LobstrModule(), new HanaModule()],
+  network: CONFIG.NETWORK_PASSPHRASE,
+  theme: {
+    background: '#171512',
+    'background-secondary': '#221f1b',
+    'foreground-strong': '#efe8dc',
+    foreground: '#efe8dc',
+    'foreground-secondary': '#b9b0a2',
+    primary: '#e84a27',
+    'primary-foreground': '#1a0a05',
+    transparent: 'rgba(0,0,0,0)',
+    lighter: '#2a2622',
+    light: '#34302a',
+    'light-gray': '#4a453d',
+    gray: '#8a8174',
+    danger: '#e84a27',
+    border: '#34302a',
+    shadow: '0 6px 24px rgba(0,0,0,.4)',
+    'border-radius': '10px',
+    'font-family': 'Inter, system-ui, sans-serif',
+  },
+});
+
 function check(res) {
   if (res && res.error) throw new Error(res.error.message || String(res.error));
   return res;
 }
 
-export async function connect() {
-  const conn = await freighter.isConnected();
-  if (!conn || !conn.isConnected) throw new Error('Freighter wallet not found. Install it from freighter.app and switch it to Testnet.');
-  const { address: a } = check(await freighter.requestAccess());
-  address = a;
-  remember(true);
-  return a;
+// The kit rejects with { code, message } objects; turn them into real errors.
+async function wallet(fn) {
+  try {
+    return check(await fn());
+  } catch (e) {
+    throw e instanceof Error ? e : new Error(e?.message || 'Wallet error');
+  }
 }
 
-// Freighter can't revoke a site's access, so "disconnect" is ours: forget the
-// wallet and don't silently reconnect on the next load.
-const FLAG = 'unveil:disconnected';
-function remember(on) {
-  try {
-    on ? localStorage.removeItem(FLAG) : localStorage.setItem(FLAG, '1');
-  } catch {}
-}
-function disconnectedByUser() {
-  try {
-    return localStorage.getItem(FLAG) === '1';
-  } catch {
-    return false;
-  }
+/** Open the wallet picker and connect. */
+export async function connect() {
+  const { address: a } = await wallet(() => StellarWalletsKit.authModal());
+  address = a;
+  return a;
 }
 
 export function disconnect() {
@@ -42,26 +64,43 @@ export function disconnect() {
   watcher?.stop();
   watcher = null;
   clients.clear();
-  remember(false);
+  StellarWalletsKit.disconnect();
 }
 
-/** Reconnect without a prompt if Freighter already allowed this site. */
+/** Reconnect without a prompt if a wallet was connected before (the kit remembers it). */
 export async function restore() {
   try {
-    if (disconnectedByUser() || !(await freighter.isAllowed())?.isAllowed) return null;
-    const { address: a } = await freighter.getAddress();
-    address = a || null;
-    return address;
+    const { address: a } = await StellarWalletsKit.getAddress();
+    StellarWalletsKit.selectedModule; // throws if the remembered wallet isn't one we offer
+    address = a;
+    return a;
   } catch {
     return null;
   }
 }
 
-/** Call `cb(address)` whenever the user switches account in Freighter. */
+/** Name of the connected wallet app, e.g. "Freighter". */
+export const walletName = () => {
+  try {
+    return StellarWalletsKit.selectedModule.productName;
+  } catch {
+    return '';
+  }
+};
+
+/**
+ * Call `cb(address)` when the user switches account inside the wallet.
+ * Only Freighter can be watched without opening a popup.
+ */
 let watcher = null;
 export function onAccountChange(cb) {
   if (watcher) return;
-  watcher = new freighter.WatchWalletChanges(1500);
+  try {
+    if (StellarWalletsKit.selectedModule.productId !== FREIGHTER_ID) return;
+  } catch {
+    return;
+  }
+  watcher = new WatchWalletChanges(1500);
   watcher.watch(({ address: a }) => {
     if (a && a !== address) {
       address = a;
@@ -83,8 +122,8 @@ async function client(withSigner) {
         networkPassphrase: CONFIG.NETWORK_PASSPHRASE,
         rpcUrl: CONFIG.RPC_URL,
         publicKey: withSigner ? address : undefined,
-        signTransaction: async (xdr) =>
-          check(await freighter.signTransaction(xdr, { networkPassphrase: CONFIG.NETWORK_PASSPHRASE, address })),
+        signTransaction: (xdr) =>
+          wallet(() => StellarWalletsKit.signTransaction(xdr, { networkPassphrase: CONFIG.NETWORK_PASSPHRASE, address })),
       }),
     );
   }
@@ -106,7 +145,7 @@ async function write(method, args) {
 }
 
 export async function signMessage(message) {
-  const res = check(await freighter.signMessage(message, { networkPassphrase: CONFIG.NETWORK_PASSPHRASE, address }));
+  const res = await wallet(() => StellarWalletsKit.signMessage(message, { networkPassphrase: CONFIG.NETWORK_PASSPHRASE, address }));
   return signatureBytes(res.signedMessage);
 }
 

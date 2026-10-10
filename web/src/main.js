@@ -3,7 +3,7 @@ globalThis.Buffer = Buffer;
 
 import './style.css';
 import { CONFIG } from './config.js';
-import { connect, disconnect, restore, onAccountChange, me, api, signMessage, uploadBlob, downloadBlob } from './chain.js';
+import { connect, disconnect, restore, onAccountChange, walletName, me, api, signMessage, uploadBlob, downloadBlob } from './chain.js';
 import * as C from './crypto.js';
 import { openPeephole } from './peephole.js';
 
@@ -69,8 +69,14 @@ function setPower(on, a) {
   btn.setAttribute('aria-label', label);
   $('#wallet-addr').hidden = !on;
   $('#wallet-addr').textContent = on ? short(a) : '';
-  $('#wallet-addr').title = on ? a : '';
+  $('#wallet-addr').title = on ? `${a} (${walletName()})` : '';
 }
+
+// Keys come from wallet signatures. A different wallet app can sign the same
+// message differently and so derive a different key; catch that early.
+const WRONG_WALLET = (what) =>
+  `This wallet produced a different ${what} than the one used before. Connect the same wallet app you used originally.`;
+const sameBytes = (a, b) => C.toHex(a) === C.toHex(b);
 
 async function showWallet(a) {
   setPower(true, a);
@@ -182,7 +188,7 @@ $('#register').addEventListener('click', (e) =>
     // Only a live, recent capture counts.
     if (Date.now() / 1000 - snapped.capturedAt > 600) throw new Error('Photo is older than 10 minutes. Take a fresh one.');
     const bundle = C.packProfile($('#real-name').value, snapped.bytes);
-    toast('Sign the message in Freighter to derive your photo key (no funds move).');
+    toast(`Sign the message in ${walletName() || 'your wallet'} to derive your photo key (no funds move).`);
     const K = C.photoKeyFromSignature(await signMessage(C.PHOTO_KEY_MESSAGE(me())));
     const sealed = await C.encryptPhoto(K, bundle);
     const hex = await uploadBlob(sealed);
@@ -260,6 +266,11 @@ async function renderInbox() {
           busy(b, 'Revealing…', async () => {
             toast('Sign to re-derive your photo key (no funds move).');
             const K = C.photoKeyFromSignature(await signMessage(C.PHOTO_KEY_MESSAGE(me())));
+            // Make sure this key really opens the registered photo before handing it over.
+            const mine = await api.getProfile(me());
+            await C.decryptPhoto(K, await downloadBlob(C.toHex(mine.photo_hash))).catch(() => {
+              throw new Error(WRONG_WALLET('photo key'));
+            });
             const wrapped = await C.wrapKey(K, r.requester_key);
             await api.approve(r.id, wrapped);
             toast(`Revealed to ${short(r.requester)}. Their deposit is now locked.`, 'ok');
@@ -418,6 +429,7 @@ let closePeep = null;
 async function view(r) {
   toast('Sign to derive your viewing key (no funds move).');
   const secret = C.requesterSecretFromSignature(await signMessage(C.REQUESTER_KEY_MESSAGE(me())));
+  if (!sameBytes(C.publicKeyOf(secret), r.requester_key)) throw new Error(WRONG_WALLET('viewing key'));
   const K = await C.unwrapKey(r.wrapped_key, secret);
   const profile = await api.getProfile(r.anon);
   const sealed = await downloadBlob(C.toHex(profile.photo_hash));
@@ -454,6 +466,7 @@ async function viewEvidence(r) {
   if (C.toHex(C.sha256Bytes(sealed)) !== C.toHex(r.evidence_hash)) throw new Error('Evidence does not match the on-chain hash');
   toast('Sign to derive your arbiter key (no funds move).');
   const secret = C.arbiterSecretFromSignature(await signMessage(C.ARBITER_KEY_MESSAGE(me())));
+  if (!sameBytes(C.publicKeyOf(secret), cfg.arbiter_key)) throw new Error(WRONG_WALLET('arbiter key'));
   const img = await C.openEvidence(sealed, secret);
   const url = URL.createObjectURL(new Blob([img]));
   $('#evidence-img').src = url;

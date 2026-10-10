@@ -22,6 +22,9 @@ await assert.rejects(c.unwrapKey(wrapped, other));
 const bad = blob.slice(); bad[40] ^= 1;
 await assert.rejects(c.decryptPhoto(K, bad));
 assert.deepEqual(c.signatureBytes(btoa(String.fromCharCode(...anonSig))), anonSig);
+// wallets differ: some return base64, some hex
+assert.deepEqual(c.signatureBytes(c.toHex(anonSig)), anonSig);
+assert.deepEqual(c.signatureBytes('0x' + c.toHex(anonSig)), anonSig);
 // profile bundle: name + photo travel together under one hash
 const packed = c.packProfile('  Ada Lovelace  ', photo);
 assert.deepEqual(c.unpackProfile(packed), { name: 'Ada Lovelace', jpeg: photo });

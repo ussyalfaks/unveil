@@ -130,10 +130,15 @@ export async function unwrapKey(wrapped, requesterSecret) {
   return open(k, wrapped.slice(65), enc.encode('unveil/wrap'));
 }
 
-/** Freighter returns the signature as base64 (v4) or a Buffer (v3). */
+/** Wallets return the signature as base64, hex, or raw bytes. */
 export function signatureBytes(signed) {
   if (signed instanceof Uint8Array) return new Uint8Array(signed);
-  if (typeof signed === 'string') return Uint8Array.from(atob(signed), (c) => c.charCodeAt(0));
+  if (typeof signed === 'string') {
+    const hex = signed.replace(/^0x/, '');
+    // A 64-byte ed25519 signature is 128 hex characters; base64 of it is 88.
+    if (/^[0-9a-f]{128}$/i.test(hex)) return Uint8Array.from(hex.match(/../g), (h) => parseInt(h, 16));
+    return Uint8Array.from(atob(signed), (c) => c.charCodeAt(0));
+  }
   if (signed && signed.data) return Uint8Array.from(signed.data);
   throw new Error('Wallet returned no signature');
 }

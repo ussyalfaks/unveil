@@ -46,7 +46,7 @@ scripts/deploy.sh   build + deploy to testnet, writes web/.env
 
 ## Run it
 
-You need Rust 1.91+, Node 20+, the [Stellar CLI](https://developers.stellar.org/docs/tools/cli/install-cli) 25.2+, and the [Freighter](https://freighter.app) wallet set to **Testnet**.
+You need Rust 1.91+, Node 20+, the [Stellar CLI](https://developers.stellar.org/docs/tools/cli/install-cli) 25.2+, and a Stellar wallet set to **Testnet**: [Freighter](https://freighter.app), [xBull](https://xbull.app), [LOBSTR](https://lobstr.co) or [Hana](https://hanawallet.io). Wallets connect through [Stellar Wallets Kit](https://stellarwalletskit.dev); only wallets that can sign plain messages are offered, because the app derives its encryption keys from those signatures.
 
 ```bash
 rustup target add wasm32v1-none
@@ -71,9 +71,9 @@ The camera needs `localhost` or HTTPS. To deploy publicly, host `web/` on any No
 
 ## Demo script (about 3 minutes)
 
-You need two Freighter accounts (Anon and Requester), both funded from friendbot.
+You need two wallet accounts (Anon and Requester), both funded from friendbot. Keep using the same wallet app for each account: keys are derived from signatures, and a different wallet app may sign differently. The app stops with a clear error if that happens.
 
-0. **Arbiter (once per deploy):** import the arbiter key into Freighter (`stellar keys show unveil-admin`), connect, open the *Arbiter* tab, *Set up arbiter key*.
+0. **Arbiter (once per deploy):** import the arbiter key into your wallet (`stellar keys show unveil-admin`), connect, open the *Arbiter* tab, *Set up arbiter key*.
 1. **Anon:** connect, start the camera, take a photo, optionally type a real name, *Encrypt & register*. Show the profile: photo hash, "registered 9s after capture". Copy the address.
 2. **Requester:** paste the address, *Look up*: "live photo on file, taken 1 min ago". Fill in the NDA, watch the hash change as you type, tick the box, *Sign NDA & lock deposit*.
 3. **Anon:** the request appears with the requester's name and the full NDA text. *Approve & reveal.*
