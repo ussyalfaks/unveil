@@ -40,8 +40,10 @@ What each party can see:
 
 ```
 contracts/unveil/   Soroban contract (Rust) + tests
-web/                Vite app, encryption, peephole, tiny storage server
-scripts/deploy.sh   build + deploy to testnet, writes web/.env
+packages/sdk/       @unveil/sdk: TypeScript SDK (encryption, contract client, wallets, peephole)
+apps/next/          Next.js + TypeScript app built on the SDK
+web/                original Vite app (plain JS)
+scripts/deploy.sh   build + deploy to testnet, writes web/.env and apps/next/.env.local
 ```
 
 ## Run it
@@ -58,7 +60,12 @@ cargo test
 ./scripts/deploy.sh              # XLM deposits, 50 XLM min, 5-minute watch window (demo-friendly)
 # TOKEN=usdc WATCH_SECS=604800 ./scripts/deploy.sh   # USDC deposits, 7-day window
 
-# 3. Run the app
+# 3a. Run the Next.js app (uses the SDK)
+npm install
+npm test                         # SDK tests
+npm run dev                      # http://localhost:3000
+
+# 3b. Or run the original app
 cd web
 npm install
 npm run test:crypto              # encryption round-trip checks
