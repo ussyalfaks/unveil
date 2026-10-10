@@ -1,0 +1,13 @@
+{
+  "name": "unveil",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build:sdk": "npm run build -w @unveil/sdk",
+    "test": "npm test -w @unveil/sdk",
+    "dev": "npm run dev -w @unveil/next"
+  }
+}

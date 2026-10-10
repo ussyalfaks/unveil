@@ -7,3 +7,8 @@ web/.env
 test_snapshots/
 .kilo/
 package-lock.json
+packages/*/dist/
+apps/*/.next/
+apps/*/data/
+apps/*/.env.local
+*.tsbuildinfo
