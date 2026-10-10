@@ -12,3 +12,4 @@ apps/*/.next/
 apps/*/data/
 apps/*/.env.local
 *.tsbuildinfo
+apps/*/next-env.d.ts
