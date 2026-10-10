@@ -25,6 +25,9 @@ const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&
 
 let cfg = null;
 
+const ICON_COPY = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="1" /><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1" /></svg>';
+const ICON_CHECK = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>';
+
 // ---------- feedback ----------
 function toast(msg, kind = 'info') {
   const el = document.createElement('div');
@@ -142,13 +145,29 @@ async function refreshAll() {
 let stream = null;
 let snapped = null; // { bytes, capturedAt }
 
+function stopCamera() {
+  stream?.getTracks().forEach((t) => t.stop());
+  stream = null;
+  $('#cam').srcObject = null;
+  $('#cam').hidden = true;
+  $('#cam-snap').disabled = true;
+  // Start and Stop share one spot: only one shows at a time.
+  $('#cam-stop').hidden = true;
+  $('#cam-start').hidden = false;
+}
+
+$('#cam-stop').addEventListener('click', stopCamera);
+
 $('#cam-start').addEventListener('click', async () => {
   try {
+    stopCamera(); // don't leak a previous stream if started twice
     stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: 640, height: 640 }, audio: false });
     $('#cam').srcObject = stream;
     $('#cam').hidden = false;
     $('#shot').hidden = true;
     $('#cam-snap').disabled = false;
+    $('#cam-start').hidden = true;
+    $('#cam-stop').hidden = false;
     $('#register').disabled = true;
   } catch (e) {
     toast('Camera blocked: ' + e.message, 'error');
@@ -175,10 +194,8 @@ $('#cam-snap').addEventListener('click', async () => {
   ctx.fillText(`UNVEIL · ${short(me())} · ${new Date(capturedAt * 1000).toISOString().replace('T', ' ').slice(0, 19)}Z`, 12, 468);
   const blob = await new Promise((r) => cv.toBlob(r, 'image/jpeg', 0.9));
   snapped = { bytes: new Uint8Array(await blob.arrayBuffer()), capturedAt };
-  stream?.getTracks().forEach((t) => t.stop());
-  v.hidden = true;
+  stopCamera();
   cv.hidden = false;
-  $('#cam-snap').disabled = true;
   $('#register').disabled = false;
 });
 
@@ -214,10 +231,24 @@ async function renderMyProfile(txHash) {
       <dt>Photo commitment</dt><dd class="mono">${C.toHex(p.photo_hash).slice(0, 24)}…</dd>
       <dt>Taken</dt><dd>${when(p.captured_at)}</dd>
       <dt>Freshness</dt><dd>registered ${p.registered_at - p.captured_at}s after capture</dd>
-      <dt>Your anon address</dt><dd class="mono copy" title="Click to copy">${me()}</dd>
+      <dt>Your anon address</dt><dd class="addr-row"><span class="mono">${me()}</span><button class="icon-btn" type="button" title="Copy address" aria-label="Copy address">${ICON_COPY}</button></dd>
     </dl>
     ${txHash ? `<a class="link" target="_blank" rel="noopener" href="${CONFIG.EXPLORER}/tx/${txHash}">View transaction ↗</a>` : ''}`;
-  $('.copy', el).addEventListener('click', () => navigator.clipboard.writeText(me()).then(() => toast('Address copied', 'ok')));
+  const copyBtn = $('.icon-btn', el);
+  copyBtn.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(me());
+    } catch {
+      return toast('Could not copy. Select the address and copy it manually.', 'error');
+    }
+    copyBtn.innerHTML = ICON_CHECK;
+    copyBtn.classList.add('done');
+    toast('Address copied', 'ok');
+    setTimeout(() => {
+      copyBtn.innerHTML = ICON_COPY;
+      copyBtn.classList.remove('done');
+    }, 1500);
+  });
 }
 
 // ---------- NDA helpers ----------

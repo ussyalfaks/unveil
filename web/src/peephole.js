@@ -45,12 +45,12 @@ export async function openPeephole(container, jpegBytes, watermark) {
   const pattern = ctx.createPattern(tile, 'repeat');
 
   function blank() {
-    ctx.fillStyle = '#121110';
+    ctx.fillStyle = '#050806';
     ctx.fillRect(0, 0, size, size);
-    ctx.fillStyle = '#2a2724';
+    ctx.fillStyle = '#2f6b3f';
     ctx.font = '500 13px "JetBrains Mono", monospace';
     ctx.textAlign = 'center';
-    ctx.fillText('move over the frame to peek', size / 2, size / 2);
+    ctx.fillText('> move over the frame to peek_', size / 2, size / 2);
   }
 
   function draw(x, y) {

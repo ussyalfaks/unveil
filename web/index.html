@@ -6,8 +6,8 @@
   <title>Unveil</title>
   <meta name="description" content="Reveal who you are to one party, under an NDA backed by a deposit on Stellar." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" />
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='13' r='7' fill='%23e84a27'/%3E%3Cpath d='M12 18h8l2 11H10z' fill='%23e84a27'/%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=VT323&display=swap" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='13' r='7' fill='%2339ff6a'/%3E%3Cpath d='M12 18h8l2 11H10z' fill='%2339ff6a'/%3E%3C/svg%3E" />
 </head>
 <body>
   <header class="top">
@@ -26,6 +26,12 @@
   </header>
 
   <section class="hero">
+    <p class="boot" aria-hidden="true">
+      <span>$ unveil --network testnet</span>
+      <span><span class="ok">[ OK ]</span> soroban contract loaded</span>
+      <span><span class="ok">[ OK ]</span> e2e encryption: p256 + aes-256-gcm</span>
+      <span><span class="ok">[ OK ]</span> watermark engine armed</span>
+    </p>
     <h1>Show your face to <em>one</em> party.<br />Make leaking it cost them.</h1>
     <p>Pseudonymous builders reveal who they are to a DAO, investor or employer, and nobody else. The requester signs an NDA and locks a deposit on Stellar. Every peek is watermarked with their wallet. Leak it, lose the deposit.</p>
     <ol class="flow">
@@ -59,6 +65,7 @@
           <label>Real name (optional, shown only to requesters you approve)<input id="real-name" maxlength="80" autocomplete="off" placeholder="Leave empty to reveal your photo only" /></label>
           <div class="actions">
             <button id="cam-start">Start camera</button>
+            <button id="cam-stop" class="danger" hidden>Stop camera</button>
             <button id="cam-snap" disabled>Take photo</button>
             <button id="register" class="primary" disabled>Encrypt &amp; register</button>
           </div>
