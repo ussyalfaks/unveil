@@ -1,0 +1,54 @@
+{
+  "name": "@unveil/sdk",
+  "version": "0.1.0",
+  "description": "Controlled identity reveal on Stellar: encrypted live photos, NDA-backed deposits and watermarked viewing.",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./browser": {
+      "types": "./dist/browser.d.ts",
+      "import": "./dist/browser.js"
+    },
+    "./wallets-kit": {
+      "types": "./dist/wallets-kit.d.ts",
+      "import": "./dist/wallets-kit.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@noble/curves": "^2.4.0",
+    "@noble/hashes": "^2.4.0",
+    "@stellar/stellar-sdk": "^17.2.1",
+    "buffer": "^6.0.3"
+  },
+  "peerDependencies": {
+    "@creit.tech/stellar-wallets-kit": "^2.7.1",
+    "@stellar/freighter-api": "^6.0.1"
+  },
+  "peerDependenciesMeta": {
+    "@creit.tech/stellar-wallets-kit": {
+      "optional": true
+    },
+    "@stellar/freighter-api": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@creit.tech/stellar-wallets-kit": "^2.7.1",
+    "@stellar/freighter-api": "^6.0.1",
+    "@types/node": "^26.6.5",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.3"
+  }
+}
