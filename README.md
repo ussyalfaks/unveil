@@ -18,8 +18,8 @@ Today an anon has two bad options: stay anonymous and never be trusted, or send 
 |---|---|---|---|
 | 1 | Anon | Takes a **live** photo. Their wallet and the time are burned into the pixels. Optionally adds their **real name**, which is packed with the photo. Both are encrypted in the browser with a key derived from their wallet signature. | Browser |
 | 2 | Anon | Registers the **hash** of the encrypted photo and the capture time. | Stellar |
-| 3 | Requester | Writes and signs an NDA. Its SHA-256 goes into the same transaction that **locks the deposit**. Their Stellar signature is their signature on the NDA. | Stellar |
-| 4 | Anon | Reads the exact NDA, then approves: the photo key is encrypted to the requester's public key (ECDH P-256) and posted. Or declines, and the deposit is refunded. | Stellar |
+| 3 | Requester | Writes and signs an NDA. Its SHA-256 goes into the same transaction that **locks the deposit** plus the platform's fee. Their Stellar signature is their signature on the NDA. | Stellar |
+| 4 | Anon | Reads the exact NDA, then approves: the photo key is encrypted to the requester's public key (ECDH P-256) and posted, and the fee is paid to the platform (minus the protocol's cut). Or declines, and deposit + fee are refunded. | Stellar |
 | 5 | Requester | Decrypts and views the photo through a **peephole**: one small circle at a time, every visible pixel stamped with their name, wallet and reveal number. The anon's real name, if shared, is shown above it. | Browser |
 | 6 | Both | **Watch window** (e.g. 7 days). No leak reported → requester withdraws. Anon reports a leak by uploading the leaked image, **encrypted so only the arbiter can open it**; its hash goes on-chain → arbiter checks the watermark → deposit paid to the anon. | Stellar |
 
@@ -93,15 +93,18 @@ You need two wallet accounts (Anon and Requester), both funded from friendbot. K
 | Function | Who | Effect |
 |---|---|---|
 | `set_profile(anon, photo_hash, captured_at)` | anon | Register or replace the encrypted-photo commitment. Rejects capture times in the future. |
-| `request_reveal(requester, anon, nda_hash, requester_key, deposit) → id` | requester | Locks the deposit and records the NDA hash and the requester's P-256 public key. |
-| `cancel(requester, id)` | requester | Withdraw an unanswered request; refund. |
-| `approve(anon, id, wrapped_key)` | anon | Post the photo key encrypted to the requester. Starts the watch window. |
-| `decline(anon, id)` | anon | Refund. |
+| `register_platform(owner, name, fee_to, arbiter, fee) → id` | anyone | Create a platform with its own fee, payout address and arbiter. |
+| `update_platform(id, fee_to, arbiter, fee)` | platform owner | Change settings; a new arbiter starts without an evidence key. |
+| `request_reveal(requester, anon, platform, nda_hash, requester_key, deposit, max_fee) → id` | requester | Locks deposit + fee and records the NDA hash, the requester's P-256 key, and the fee and arbiter in force. |
+| `cancel(requester, id)` | requester | Withdraw an unanswered request; refund deposit + fee. |
+| `approve(anon, id, wrapped_key)` | anon | Post the photo key encrypted to the requester; pay out the fee. Starts the watch window. |
+| `decline(anon, id)` | anon | Refund deposit + fee. |
 | `report_leak(anon, id, evidence_hash)` | anon | Inside the window only; freezes the deposit. |
 | `release(requester, id)` | requester | After the window; refund. |
-| `set_arbiter_key(key)` | arbiter | Publish the P-256 public key that leak evidence is encrypted to. |
-| `resolve(id, leaked)` | arbiter | Pay the anon (leak proven) or refund the requester. |
-| `get_profile`, `get_request`, `request_count`, `config` | anyone | Reads. |
+| `set_arbiter_key(platform, key)` | platform arbiter | Publish the P-256 public key that the platform's leak evidence is encrypted to. |
+| `resolve(id, leaked)` | request's arbiter | Pay the anon (leak proven) or refund the requester. |
+| `set_protocol_fee(bps, treasury)` | admin | The protocol's cut of every fee (max 30%) and where it goes. |
+| `get_profile`, `get_request`, `request_count`, `get_platform`, `platform_count`, `config` | anyone | Reads. |
 
 Statuses: `Pending → Revealed → Released` · `Pending → Declined | Cancelled` · `Revealed → Disputed → Slashed | Cleared`.
 
@@ -109,6 +112,6 @@ Statuses: `Pending → Revealed → Released` · `Pending → Declined | Cancell
 
 - **The peephole raises the effort; it doesn't make copying impossible.** Once decrypted, the photo is in the requester's browser memory, and someone with developer tools can extract it. The deterrent is that any copy carries their watermark, and the deposit makes leaking expensive.
 - **The real name can't be watermarked.** It's shown as text, so a requester can copy it without a trace. The deposit is the only deterrent.
-- **Disputes have one arbiter** (the deployer). Next step: a multisig or a jury of staked arbiters.
+- **Each platform has one arbiter.** Platforms choose their own, and a request keeps the arbiter it was made under, but within a platform one wallet decides. Next step: a multisig or a jury of staked arbiters.
 - **Freshness relies on the anon's clock plus ledger time.** The contract rejects future timestamps, and the app shows how long after capture the photo reached the chain. A stronger version would bind the photo to a recent ledger hash shown on screen at capture.
 - **Liveness is "a camera took this now", not face matching.** Pairing it with a passport-based ZK proof (for example with Stellar's BN254 and Poseidon primitives from Protocol 25) would prove the face belongs to a real document holder.
