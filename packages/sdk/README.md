@@ -117,3 +117,7 @@ interface WalletAdapter {
 ## Protocol stability
 
 The encryption formats (`UNV2` profile bundle, `unveil/v1` key derivation, the 125-byte wrapped key) are part of the protocol. They are versioned and won't change silently, so photos and reveals made with one SDK version open with the next.
+
+## License
+
+MIT
