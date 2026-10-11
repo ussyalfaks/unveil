@@ -4,8 +4,8 @@
 // swap a file without clients noticing.
 //
 // Backend is picked automatically:
-//   - Vercel Blob when BLOB_READ_WRITE_TOKEN is set (it is, once a Blob store
-//     is connected to the Vercel project). Files are private: reachable only
+//   - Vercel Blob when a Blob store is connected to the Vercel project (Vercel
+//     then sets BLOB_STORE_ID and/or BLOB_READ_WRITE_TOKEN). Files are private: reachable only
 //     through these API routes, never by a public URL.
 //   - The local disk otherwise (DATA_DIR, default ./data), for development.
 import { createHash } from 'node:crypto';
@@ -66,7 +66,9 @@ function disk(): Backend {
   };
 }
 
-const backend: Backend = process.env.BLOB_READ_WRITE_TOKEN ? vercelBlob() : disk();
+// Vercel sets BLOB_STORE_ID (newer stores) and/or BLOB_READ_WRITE_TOKEN when a Blob store is connected.
+const onVercelBlob = !!(process.env.BLOB_STORE_ID || process.env.BLOB_READ_WRITE_TOKEN);
+const backend: Backend = onVercelBlob ? vercelBlob() : disk();
 
 export async function putBlob(bytes: Uint8Array): Promise<string> {
   const hash = sha256(bytes);

@@ -20,7 +20,7 @@ npm run dev                                       # http://localhost:3000
 | `NEXT_PUBLIC_TOKEN_SYMBOL` | `XLM` or `USDC`, for display. |
 | `NEXT_PUBLIC_NETWORK` | `testnet` (default) or `mainnet`. |
 | `DATA_DIR` | Where the storage API writes encrypted files locally (default `apps/frontend/data`). |
-| `BLOB_READ_WRITE_TOKEN` | Set by Vercel when a Blob store is connected; switches storage to Vercel Blob. |
+| `BLOB_STORE_ID` / `BLOB_READ_WRITE_TOKEN` | Set by Vercel when a Blob store is connected; either switches storage to Vercel Blob. |
 
 ## Layout
 
@@ -46,7 +46,7 @@ lib/
 1. **Add New → Project**, import the repo.
 2. **Root Directory:** `apps/frontend`. Leave the build and install commands as they are, and keep "Include files outside the root directory" on (the app builds `packages/sdk` from the workspace).
 3. **Environment variables:** `NEXT_PUBLIC_CONTRACT_ID`, `NEXT_PUBLIC_TOKEN_SYMBOL`, `NEXT_PUBLIC_NETWORK`, `NEXT_PUBLIC_PLATFORM_ID` (copy them from `.env.local`).
-4. **Storage → Create → Blob** (private), and connect it to the project. That sets `BLOB_READ_WRITE_TOKEN`, and the storage API switches from the disk to Vercel Blob automatically.
+4. **Storage → Create Database → Blob → Continue**, set access to **Private**, and create it inside the project. Vercel connects it and sets `BLOB_STORE_ID` (and `BLOB_READ_WRITE_TOKEN`); the storage API then switches from the disk to Vercel Blob automatically. Redeploy afterwards.
 5. Deploy. Pushes to `main` redeploy.
 
 Vercel has no persistent disk, so step 4 is required: without it, uploaded photos disappear.
