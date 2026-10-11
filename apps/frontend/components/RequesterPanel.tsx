@@ -9,6 +9,8 @@ import { ActionButton, StatusPill, downloadText, useLoad } from './ui';
 import { useUnveil } from './UnveilProvider';
 
 const enc = new TextEncoder();
+/** Share of the photo's area the peephole circle reveals at once. */
+const PEEK_AREA = 0.2;
 const toUnitsSafe = (v: string) => {
   try {
     return toUnits(v || '0');
@@ -245,7 +247,10 @@ function RevealDialog({ reveal, onClose }: { reveal: OpenReveal | null; onClose:
     dialog.showModal();
     let close: (() => void) | null = null;
     let cancelled = false;
-    openPeephole(peepRef.current!, reveal.jpeg, { watermark: reveal.watermark }).then((c) => {
+    // Circle shows 20% of the photo's area: πr² = 0.2 × size², with size as the peephole computes it.
+    const size = Math.min(peepRef.current!.clientWidth || 420, 420);
+    const radius = Math.round(size * Math.sqrt(PEEK_AREA / Math.PI));
+    openPeephole(peepRef.current!, reveal.jpeg, { watermark: reveal.watermark, radius }).then((c) => {
       if (cancelled) c();
       else close = c;
     });
