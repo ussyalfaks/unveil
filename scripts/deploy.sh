@@ -49,8 +49,8 @@ cat > web/.env <<EOF
 VITE_CONTRACT_ID=$CONTRACT_ID
 VITE_TOKEN_SYMBOL=$SYMBOL
 EOF
-if [ -d apps/next ]; then
-  cat > apps/next/.env.local <<EOF
+if [ -d apps/frontend ]; then
+  cat > apps/frontend/.env.local <<EOF
 NEXT_PUBLIC_CONTRACT_ID=$CONTRACT_ID
 NEXT_PUBLIC_TOKEN_SYMBOL=$SYMBOL
 NEXT_PUBLIC_NETWORK=$NET
@@ -62,4 +62,4 @@ echo "✓ Contract: $CONTRACT_ID"
 echo "  https://stellar.expert/explorer/testnet/contract/$CONTRACT_ID"
 echo "✓ Arbiter (admin) wallet: $ADMIN"
 echo "  To act as arbiter in the app, import its secret into Freighter: stellar keys show unveil-admin"
-echo "✓ Wrote web/.env and apps/next/.env.local. Next: npm install && npm run dev"
+echo "✓ Wrote web/.env and apps/frontend/.env.local. Next: npm install && npm run dev"

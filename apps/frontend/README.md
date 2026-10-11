@@ -8,18 +8,18 @@ From the repo root:
 
 ```bash
 npm install
-cp apps/next/.env.example apps/next/.env.local   # then set NEXT_PUBLIC_CONTRACT_ID
+cp apps/frontend/.env.example apps/frontend/.env.local   # then set NEXT_PUBLIC_CONTRACT_ID
 npm run dev                                       # http://localhost:3000
 ```
 
-`npm run dev` builds the SDK first, then starts Next.js. For a production build: `npm run build -w @unveil/next && npm run start -w @unveil/next`.
+`npm run dev` builds the SDK first, then starts Next.js. For a production build: `npm run build -w @unveil/frontend && npm run start -w @unveil/frontend`.
 
 | Variable | |
 |---|---|
 | `NEXT_PUBLIC_CONTRACT_ID` | The deployed contract (`scripts/deploy.sh` prints it). |
 | `NEXT_PUBLIC_TOKEN_SYMBOL` | `XLM` or `USDC`, for display. |
 | `NEXT_PUBLIC_NETWORK` | `testnet` (default) or `mainnet`. |
-| `DATA_DIR` | Where the storage API writes encrypted files (default `apps/next/data`). |
+| `DATA_DIR` | Where the storage API writes encrypted files (default `apps/frontend/data`). |
 
 ## Layout
 
