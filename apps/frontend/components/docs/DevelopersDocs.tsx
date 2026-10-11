@@ -75,6 +75,7 @@ const kit = createWalletsKit({ network: TESTNET });
 export const unveil = new Unveil({
   contractId: '${contractId || 'C…'}',
   network: TESTNET,                    // or MAINNET
+  platform: 0,                         // the platform requests go through (see Platform Integration)
   wallet: kit.adapter,
   storage: httpStorage('/api/blob'),   // see Platform Integration → Storage
 });
@@ -119,15 +120,17 @@ await unveil.anon.register({
       <section id="request">
         <h2>Requester: sign the NDA</h2>
         <p>
-          The requester agrees to an NDA and locks a deposit in one transaction. The NDA&apos;s SHA-256 goes on-chain with their signature, so
-          their Stellar signature is their signature on the agreement. The full text is stored so the anon can read exactly what was signed.
+          The requester agrees to an NDA and locks a deposit plus the platform&apos;s fee in one transaction. The NDA&apos;s SHA-256 goes on-chain
+          with their signature, so their Stellar signature is their signature on the agreement. The full text is stored so the anon can read
+          exactly what was signed. The fee is paid only if the anon approves; a decline or cancel refunds it with the deposit.
         </p>
         <CodeBlock
           title="requester/request.ts"
           code={`
 import { buildNda, toUnits } from 'unveil-sdk';
 
-const cfg = await unveil.config();   // min deposit, watch window, arbiter key
+const cfg = await unveil.config();   // min deposit, watch window
+const { fee, platform } = await unveil.quote();   // show this before they sign
 
 const ndaText = buildNda({
   recipient: 'Grace Hopper',          // also stamped on every view
@@ -144,6 +147,7 @@ const { result: requestId } = await unveil.requester.request({
   anon: anonAddress,
   ndaText,
   deposit: toUnits(50),               // smallest units: 50 XLM = 500000000n
+  maxFee: fee,                        // refuse if the platform raised its fee meanwhile
 });`}
         />
       </section>
@@ -221,16 +225,17 @@ await unveil.requester.cancel(requestId);`}
       <section id="arbiter">
         <h2>Arbiter</h2>
         <p>
-          The arbiter is the contract admin. They publish an evidence key once per deployment, then settle disputes by checking the watermark
-          on the leaked image.
+          Each platform has its own arbiter. They publish an evidence key once, then settle disputes by checking the watermark on the
+          leaked image. A request is settled by the arbiter recorded when it was made, even if the platform changes arbiter later.
         </p>
         <CodeBlock
           title="arbiter.ts"
           code={`
-// once per deployment, from the admin wallet
-await unveil.arbiter.setupKey();
+// once per platform, from that platform's arbiter wallet
+await unveil.arbiter.setupKey();          // or setupKey(platformId)
 
-const disputes = await unveil.requests({ status: 'Disputed' });
+const disputes = (await unveil.requests({ status: 'Disputed' }))
+  .filter((r) => r.arbiter === arbiterAddress);
 const image = await unveil.arbiter.openEvidence(disputes[0].id);   // Uint8Array
 
 await unveil.arbiter.resolve(disputes[0].id, true);   // leak proven: deposit to the anon
@@ -244,7 +249,10 @@ await unveil.arbiter.resolve(disputes[0].id, false);  // not proven: refund the 
         <CodeBlock
           title="reads.ts"
           code={`
-await unveil.config();                         // { admin, token, minDeposit, watchSecs, arbiterKey }
+await unveil.config();                         // { admin, token, minDeposit, watchSecs, treasury, protocolFeeBps }
+await unveil.quote(platformId?);               // { fee, protocolCut, platformCut, platform }
+await unveil.platforms.get(id);                // { name, owner, feeTo, arbiter, arbiterKey, fee }
+await unveil.platforms.list();
 await unveil.profile(address);                 // { photoHash, capturedAt, registeredAt } | null
 await unveil.request(id);                      // one request
 await unveil.requests({ anon, requester, status });   // filtered, newest first
@@ -306,7 +314,7 @@ try {
           </thead>
           <tbody>
             <tr><td><code>WRONG_WALLET</code></td><td>A different wallet app derived a different key than the one used before</td></tr>
-            <tr><td><code>NO_ARBITER_KEY</code></td><td>Leak evidence can&apos;t be filed until the arbiter runs <code>setupKey()</code></td></tr>
+            <tr><td><code>NO_ARBITER_KEY</code></td><td>The request&apos;s arbiter hasn&apos;t run <code>setupKey()</code>, or the platform has since replaced them</td></tr>
             <tr><td><code>HASH_MISMATCH</code></td><td>Storage returned a file that doesn&apos;t match its on-chain hash</td></tr>
             <tr><td><code>STALE_PHOTO</code></td><td>The photo is older than <code>maxPhotoAgeSecs</code></td></tr>
             <tr><td><code>NO_PROFILE</code>, <code>NOT_ALLOWED</code>, <code>BAD_INPUT</code></td><td>What they say</td></tr>
