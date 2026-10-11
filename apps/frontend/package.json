@@ -13,10 +13,11 @@
   "dependencies": {
     "@creit.tech/stellar-wallets-kit": "^2.7.1",
     "@stellar/freighter-api": "^6.0.1",
-    "unveil-sdk": "*",
+    "@vercel/blob": "^2.8.1",
     "next": "^16.4.0",
     "react": "^19.3.0",
-    "react-dom": "^19.3.0"
+    "react-dom": "^19.3.0",
+    "unveil-sdk": "*"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",
