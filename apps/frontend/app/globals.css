@@ -275,3 +275,4 @@ main.docs { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 40p
   .top-link::before { content: none; }
 }
 .docs-body code { font-family: var(--mono); }
+.fee-line { margin: 14px 0 0; font-size: 12.5px; }

@@ -159,7 +159,15 @@ function Inbox() {
   const { data } = useLoad(
     () =>
       unveil && address
-        ? unveil.requests({ anon: address }).then((rs) => Promise.all(rs.map(async (r) => ({ r, nda: await unveil.ndaText(r) }))))
+        ? unveil.requests({ anon: address }).then((rs) =>
+            Promise.all(
+              rs.map(async (r) => {
+                const [nda, p] = await Promise.all([unveil.ndaText(r), unveil.platforms.get(r.platform)]);
+                // Evidence is sealed to the request's own arbiter, who must still hold the platform's key.
+                return { r, nda, canSeal: p.arbiter === r.arbiter && p.arbiterKey.length > 0 };
+              }),
+            ),
+          )
         : null,
     [unveil, address, version],
   );
@@ -176,10 +184,10 @@ function Inbox() {
   const now = Date.now() / 1000;
   return (
     <div className="cards">
-      {data.map(({ r, nda }) => {
+      {data.map(({ r, nda, canSeal }) => {
         const watchEnd = r.revealedAt + (cfg?.watchSecs ?? 0);
         const canReport = r.status === 'Revealed' && now < watchEnd;
-        const noKey = !cfg?.arbiterKey.length;
+        const noKey = !canSeal;
         return (
           <article key={r.id} className="card">
             <header>
@@ -250,7 +258,7 @@ function Inbox() {
             </div>
             {canReport && noKey && (
               <p className="warn tiny">
-                The arbiter hasn&apos;t set up an evidence key yet, so leak reports can&apos;t be encrypted. Ask them to open the Arbiter tab.
+                This request&apos;s arbiter hasn&apos;t set up an evidence key, so leak reports can&apos;t be encrypted yet. Ask them to open the Arbiter tab.
               </p>
             )}
           </article>

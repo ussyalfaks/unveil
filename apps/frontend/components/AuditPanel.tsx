@@ -29,7 +29,9 @@ export function AuditPanel() {
                 <th>Status</th>
                 <th>Requester</th>
                 <th>Anon</th>
+                <th>Platform</th>
                 <th>Deposit</th>
+                <th>Fee</th>
                 <th>NDA hash</th>
                 <th>Asked</th>
                 <th>Revealed</th>
@@ -38,13 +40,13 @@ export function AuditPanel() {
             <tbody>
               {!data ? (
                 <tr>
-                  <td colSpan={8} className="muted">
+                  <td colSpan={10} className="muted">
                     Loading…
                   </td>
                 </tr>
               ) : !data.length ? (
                 <tr>
-                  <td colSpan={8} className="muted">
+                  <td colSpan={10} className="muted">
                     Nothing on-chain yet.
                   </td>
                 </tr>
@@ -57,7 +59,9 @@ export function AuditPanel() {
                     </td>
                     <td className="mono">{short(r.requester)}</td>
                     <td className="mono">{short(r.anon)}</td>
+                    <td className="mono">#{r.platform}</td>
                     <td>{fmtAmt(r.deposit)}</td>
+                    <td>{r.fee > 0n ? fmtAmt(r.fee) : '—'}</td>
                     <td className="mono">{C.toHex(r.ndaHash).slice(0, 12)}…</td>
                     <td>{when(r.createdAt)}</td>
                     <td>{when(r.revealedAt)}</td>

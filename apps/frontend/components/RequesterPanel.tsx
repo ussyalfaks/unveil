@@ -9,6 +9,13 @@ import { ActionButton, StatusPill, downloadText, useLoad } from './ui';
 import { useUnveil } from './UnveilProvider';
 
 const enc = new TextEncoder();
+const toUnitsSafe = (v: string) => {
+  try {
+    return toUnits(v || '0');
+  } catch {
+    return 0n;
+  }
+};
 
 interface OpenReveal {
   request: RevealRequest;
@@ -18,7 +25,7 @@ interface OpenReveal {
 }
 
 export function RequesterPanel() {
-  const { unveil, address, cfg, toast, refresh } = useUnveil();
+  const { unveil, address, cfg, quote, toast, refresh } = useUnveil();
   const [anon, setAnon] = useState('');
   const [profile, setProfile] = useState<Profile | null | undefined>(undefined); // undefined = not looked up
   const [name, setName] = useState('');
@@ -108,6 +115,17 @@ export function RequesterPanel() {
                   Deposit ({TOKEN_SYMBOL}, locked for {cfg ? period(cfg.watchSecs) : '?'} after reveal)
                   <input type="number" step="1" min={minDeposit} value={deposit} onChange={(e) => setDeposit(e.target.value)} />
                 </label>
+                {quote && (
+                  <dl className="facts fee-line">
+                    <dt>Platform fee</dt>
+                    <dd>
+                      {quote.fee > 0n ? fmtAmt(quote.fee) : 'free'}{' '}
+                      <span className="muted">({quote.platform.name}; charged only if they approve, refunded otherwise)</span>
+                    </dd>
+                    <dt>Locked now</dt>
+                    <dd>{fmtAmt(toUnitsSafe(deposit) + quote.fee)}</dd>
+                  </dl>
+                )}
                 <label className="check">
                   <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} /> I accept this NDA. My Stellar
                   signature is my signature.
@@ -121,7 +139,8 @@ export function RequesterPanel() {
                     if (!agree) throw new Error('Tick the box to accept the NDA');
                     const units = toUnits(deposit || '0');
                     if (cfg && units < cfg.minDeposit) throw new Error(`Minimum deposit is ${fmtAmt(cfg.minDeposit)}`);
-                    const { result: id } = await unveil!.requester.request({ anon: anon.trim(), ndaText: nda, deposit: units });
+                    // maxFee = the fee shown on screen, so a fee rise in the meantime can't be charged.
+                    const { result: id } = await unveil!.requester.request({ anon: anon.trim(), ndaText: nda, deposit: units, maxFee: quote?.fee });
                     toast(`Request #${id} sent. You'll see the result below once they answer.`, 'ok');
                     downloadText(`unveil-nda-${id}.txt`, nda);
                     refresh();
@@ -166,6 +185,7 @@ function Outbox({ onOpen }: { onOpen: (r: OpenReveal) => void }) {
             </header>
             <p>
               Anon <span className="mono">{short(r.anon)}</span> · deposit {fmtAmt(r.deposit)}
+              {r.fee > 0n && <> · fee {fmtAmt(r.fee)}</>}
             </p>
             {r.status === 'Revealed' && <p className="muted">Deposit unlocks {when(unlock)}</p>}
             <div className="actions">
@@ -175,7 +195,7 @@ function Outbox({ onOpen }: { onOpen: (r: OpenReveal) => void }) {
                   busyLabel="Cancelling…"
                   onClick={async () => {
                     await unveil!.requester.cancel(r.id);
-                    toast('Cancelled, deposit refunded', 'ok');
+                    toast('Cancelled, deposit and fee refunded', 'ok');
                     refresh();
                   }}
                 />

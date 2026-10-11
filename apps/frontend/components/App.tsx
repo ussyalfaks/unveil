@@ -18,9 +18,9 @@ const TABS: { id: Tab; label: string }[] = [
 ];
 
 function Tabs() {
-  const { address, cfg } = useUnveil();
+  const { address, quote } = useUnveil();
   const [tab, setTab] = useState<Tab>('anon');
-  const isArbiter = !!address && address === cfg?.admin;
+  const isArbiter = !!address && address === quote?.platform.arbiter;
 
   // Leave the arbiter tab if the wallet switches to a non-arbiter account.
   useEffect(() => {

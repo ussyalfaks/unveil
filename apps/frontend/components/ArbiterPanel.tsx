@@ -7,23 +7,27 @@ import { ActionButton, StatusPill, useLoad } from './ui';
 import { useUnveil } from './UnveilProvider';
 
 export function ArbiterPanel() {
-  const { unveil, cfg, version, toast, refresh } = useUnveil();
-  const { data: disputes } = useLoad(() => (unveil ? unveil.requests({ status: 'Disputed' }) : null), [unveil, version]);
+  const { unveil, address, quote, version, toast, refresh } = useUnveil();
+  // Only disputes this wallet is the recorded arbiter for.
+  const { data: disputes } = useLoad(
+    () => (unveil && address ? unveil.requests({ status: 'Disputed' }).then((rs) => rs.filter((r) => r.arbiter === address)) : null),
+    [unveil, address, version],
+  );
   const [evidence, setEvidence] = useState<{ id: number; url: string } | null>(null);
-  const hasKey = !!cfg?.arbiterKey.length;
+  const hasKey = !!quote?.platform.arbiterKey.length;
 
   return (
     <section className="panel">
       <div className="box">
         <h2>Evidence key</h2>
         <p className="muted">
-          {!cfg
+          {!quote
             ? 'Loading…'
             : hasKey
-              ? 'Set. Leak evidence is encrypted to your key, and only you can open it.'
+              ? `Set for platform #${quote.platform.id} "${quote.platform.name}". Leak evidence is encrypted to your key, and only you can open it.`
               : "Not set. Until you set it, anons can't submit leak evidence. One signature derives it; the public half is stored on-chain."}
         </p>
-        {cfg && !hasKey && (
+        {quote && !hasKey && (
           <div className="actions">
             <ActionButton
               label="Set up arbiter key"

@@ -1,9 +1,9 @@
 'use client';
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
-import { Unveil, httpStorage, type Config, type ProgressEvent } from 'unveil-sdk';
+import { Unveil, httpStorage, type Config, type FeeQuote, type ProgressEvent } from 'unveil-sdk';
 import type { WalletsKit } from 'unveil-sdk/wallets-kit';
-import { CONTRACT_ID, NETWORK } from '@/lib/config';
+import { CONTRACT_ID, NETWORK, PLATFORM_ID } from '@/lib/config';
 import { errorMessage, short } from '@/lib/format';
 
 export type ToastKind = 'info' | 'ok' | 'error';
@@ -18,6 +18,8 @@ interface UnveilContext {
   address: string | null;
   walletName: string;
   cfg: Config | null;
+  /** This app's platform: its fee, payout split and arbiter. */
+  quote: FeeQuote | null;
   /** Bumps after every successful action, so panels reload. */
   version: number;
   connecting: boolean;
@@ -72,6 +74,7 @@ export function UnveilProvider({ children }: { children: ReactNode }) {
   const [unveil, setUnveil] = useState<Unveil | null>(null);
   const [address, setAddress] = useState<string | null>(null);
   const [cfg, setCfg] = useState<Config | null>(null);
+  const [quote, setQuote] = useState<FeeQuote | null>(null);
   const [version, setVersion] = useState(0);
   const [connecting, setConnecting] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
@@ -102,6 +105,7 @@ export function UnveilProvider({ children }: { children: ReactNode }) {
         new Unveil({
           contractId: CONTRACT_ID,
           network: NETWORK,
+          platform: PLATFORM_ID,
           wallet: kit.adapter,
           storage: httpStorage('/api/blob'),
           onProgress: (e) => {
@@ -121,6 +125,10 @@ export function UnveilProvider({ children }: { children: ReactNode }) {
       .config()
       .then(setCfg)
       .catch((e) => toast(errorMessage(e), 'error'));
+    unveil
+      .quote()
+      .then(setQuote)
+      .catch((e) => toast(`Platform #${PLATFORM_ID}: ${errorMessage(e)}`, 'error'));
   }, [unveil, version, toast]);
 
   // Follow account switches inside the wallet (Freighter only).
@@ -157,6 +165,7 @@ export function UnveilProvider({ children }: { children: ReactNode }) {
         address,
         walletName: address ? (kitRef.current?.walletName() ?? '') : '',
         cfg,
+        quote,
         version,
         connecting,
         connect,
