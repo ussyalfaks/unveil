@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { NETWORK_LABEL } from '@/lib/config';
 import { short } from '@/lib/format';
 import { useUnveil } from './UnveilProvider';
@@ -19,6 +20,9 @@ export function Header() {
         <span className="net">{NETWORK_LABEL}</span>
       </div>
       <div className="wallet">
+        <Link className="link top-link" href="/docs">
+          docs
+        </Link>
         {on && (
           <span className="wallet-addr" title={`${address} (${walletName})`}>
             {short(address)}
