@@ -5,21 +5,28 @@ import { fakeContract, fakeWallet } from './fakes.js';
 const ANON = 'GANON';
 const REQ = 'GREQUESTER';
 const ADMIN = 'GADMIN';
+const TREASURY = 'GTREASURY';
+const OWNER = 'GOWNER';
+const FEE_TO = 'GFEETO';
+const ARB = 'GARBITER';
 const MIN = toUnits(50);
+const FEE = toUnits(1);
 const WATCH = 300;
 
 let clock: number;
 let contract: ReturnType<typeof fakeContract>;
 let storage: ReturnType<typeof memoryStorage>;
+let platform: number;
 const photo = crypto.getRandomValues(new Uint8Array(5000));
 
-function as(address: string, app = 'a', events?: ProgressEvent[]) {
+function as(address: string, app = 'a', extra: { events?: ProgressEvent[]; platform?: number } = {}) {
   return new Unveil({
     contract,
     storage,
     wallet: fakeWallet(address, app),
+    platform: extra.platform ?? platform,
     now: () => clock,
-    onProgress: events ? (e) => events.push(e) : undefined,
+    onProgress: extra.events ? (e) => extra.events!.push(e) : undefined,
   });
 }
 
@@ -33,10 +40,11 @@ async function revealed() {
   return id;
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   clock = 1_000_000;
-  contract = fakeContract({ admin: ADMIN, minDeposit: MIN, watchSecs: WATCH, now: () => clock });
+  contract = fakeContract({ admin: ADMIN, treasury: TREASURY, protocolFeeBps: 1000, minDeposit: MIN, watchSecs: WATCH, now: () => clock });
   storage = memoryStorage();
+  platform = (await as(OWNER, 'a', { platform: 0 }).platforms.register({ name: 'Test DAO', feeTo: FEE_TO, arbiter: ARB, fee: FEE })).result;
 });
 
 describe('reveal flow', () => {
@@ -58,17 +66,17 @@ describe('reveal flow', () => {
     expect(Buffer.from(stored).includes(Buffer.from(photo.slice(0, 64)))).toBe(false);
   });
 
-  it('refunds after the watch window', async () => {
+  it('refunds the deposit after the watch window; the fee stays spent', async () => {
     const id = await revealed();
     await expect(as(REQ).requester.release(id)).rejects.toThrow(/StillLocked/);
     clock += WATCH;
     await as(REQ).requester.release(id);
-    expect(contract.balances.get(REQ)).toBe(MIN);
+    expect(contract.balances.get(REQ)).toBe(-FEE);
   });
 
   it('reports progress so apps can prompt the user', async () => {
     const events: ProgressEvent[] = [];
-    await as(ANON, 'a', events).anon.register({ photo, capturedAt: clock });
+    await as(ANON, 'a', { events }).anon.register({ photo, capturedAt: clock });
     expect(events).toEqual([
       { step: 'sign-message', key: 'photo' },
       { step: 'upload', what: 'photo' },
@@ -80,6 +88,61 @@ describe('reveal flow', () => {
     await revealed();
     expect(await as(ANON).requests({ anon: ANON })).toHaveLength(1);
     expect(await as(ANON).requests({ requester: ANON })).toHaveLength(0);
+  });
+});
+
+describe('platforms and fees', () => {
+  it('quotes the fee and how it splits', async () => {
+    const q = await as(REQ).quote();
+    expect(q.platform.name).toBe('Test DAO');
+    expect(q.fee).toBe(FEE);
+    expect(q.protocolCut).toBe(FEE / 10n);
+    expect(q.platformCut).toBe(FEE - FEE / 10n);
+  });
+
+  it('records the platform, fee and arbiter on the request', async () => {
+    await as(ANON).anon.register({ photo, capturedAt: clock });
+    const { result: id } = await as(REQ).requester.request({ anon: ANON, ndaText: nda(), deposit: MIN });
+    const r = await as(REQ).request(id);
+    expect([r.platform, r.fee, r.arbiter]).toEqual([platform, FEE, ARB]);
+    expect(contract.balances.get(REQ)).toBe(-(MIN + FEE));
+  });
+
+  it('pays the fee only when the anon approves', async () => {
+    await revealed();
+    expect(contract.balances.get(TREASURY)).toBe(FEE / 10n);
+    expect(contract.balances.get(FEE_TO)).toBe(FEE - FEE / 10n);
+  });
+
+  it('refunds deposit and fee on decline', async () => {
+    await as(ANON).anon.register({ photo, capturedAt: clock });
+    const { result: id } = await as(REQ).requester.request({ anon: ANON, ndaText: nda(), deposit: MIN });
+    await as(ANON).anon.decline(id);
+    expect(contract.balances.get(REQ)).toBe(0n);
+    expect(contract.balances.get(FEE_TO)).toBeUndefined();
+  });
+
+  it('refuses a fee above maxFee', async () => {
+    await as(ANON).anon.register({ photo, capturedAt: clock });
+    await as(OWNER).platforms.update(platform, { fee: FEE * 5n });
+    await expect(
+      as(REQ).requester.request({ anon: ANON, ndaText: nda(), deposit: MIN, maxFee: FEE }),
+    ).rejects.toThrow(/FeeTooHigh/);
+  });
+
+  it('can send a request through another platform', async () => {
+    const { result: free } = await as(OWNER).platforms.register({ name: 'Free', feeTo: OWNER, arbiter: ARB, fee: 0n });
+    await as(ANON).anon.register({ photo, capturedAt: clock });
+    const { result: id } = await as(REQ).requester.request({ anon: ANON, ndaText: nda(), deposit: MIN, platform: free });
+    expect((await as(REQ).request(id)).fee).toBe(0n);
+    expect(await as(REQ).platforms.list()).toHaveLength(2);
+  });
+
+  it('lets only the owner update a platform', async () => {
+    await expect(as(REQ).platforms.update(platform, { fee: 0n })).rejects.toThrow(/auth/);
+    await as(OWNER).platforms.update(platform, { feeTo: OWNER });
+    const p = await as(REQ).platforms.get(platform);
+    expect([p.feeTo, p.arbiter, p.fee]).toEqual([OWNER, ARB, FEE]); // untouched fields kept
   });
 });
 
@@ -108,30 +171,41 @@ describe('guards', () => {
   it('detects storage that swaps files', async () => {
     const id = await revealed();
     const evil = { ...storage, get: async () => crypto.getRandomValues(new Uint8Array(100)) };
-    const u = new Unveil({ contract, storage: evil, wallet: fakeWallet(REQ), now: () => clock });
+    const u = new Unveil({ contract, storage: evil, wallet: fakeWallet(REQ), platform, now: () => clock });
     await expect(u.requester.open(id)).rejects.toMatchObject({ code: 'HASH_MISMATCH' });
   });
 });
 
 describe('disputes', () => {
-  it('needs the arbiter key before evidence can be filed', async () => {
+  it("needs the platform arbiter's key before evidence can be filed", async () => {
     const id = await revealed();
     await expect(as(ANON).anon.reportLeak(id, new Uint8Array([1]))).rejects.toMatchObject({ code: 'NO_ARBITER_KEY' });
   });
 
-  it('seals evidence for the arbiter, who resolves the dispute', async () => {
-    await as(ADMIN).arbiter.setupKey();
+  it("seals evidence for the request's arbiter, who resolves the dispute", async () => {
+    await as(ARB).arbiter.setupKey();
     const id = await revealed();
     const leak = crypto.getRandomValues(new Uint8Array(2000));
     await as(ANON).anon.reportLeak(id, leak);
-    expect((await as(ADMIN).request(id)).status).toBe('Disputed');
+    expect((await as(ARB).request(id)).status).toBe('Disputed');
 
-    expect(await as(ADMIN).arbiter.openEvidence(id)).toEqual(leak);
-    await expect(as(ADMIN, 'other-app').arbiter.openEvidence(id)).rejects.toMatchObject({ code: 'WRONG_WALLET' });
+    expect(await as(ARB).arbiter.openEvidence(id)).toEqual(leak);
+    await expect(as(ARB, 'other-app').arbiter.openEvidence(id)).rejects.toMatchObject({ code: 'WRONG_WALLET' });
+    await expect(as(ADMIN).arbiter.openEvidence(id)).rejects.toMatchObject({ code: 'NOT_ALLOWED' });
 
-    await as(ADMIN).arbiter.resolve(id, true);
+    await as(ARB).arbiter.resolve(id, true);
     expect(contract.balances.get(ANON)).toBe(MIN);
-    expect((await as(ADMIN).request(id)).status).toBe('Slashed');
+    expect((await as(ARB).request(id)).status).toBe('Slashed');
+  });
+
+  it("can't seal evidence once the platform has replaced the request's arbiter", async () => {
+    await as(ARB).arbiter.setupKey();
+    const id = await revealed();
+    await as(OWNER).platforms.update(platform, { arbiter: 'GNEWARB' });
+    await expect(as(ANON).anon.reportLeak(id, new Uint8Array([1]))).rejects.toMatchObject({ code: 'NO_ARBITER_KEY' });
+    // Even once the new arbiter has a key: they can't resolve this request, so don't seal to them.
+    await as('GNEWARB').arbiter.setupKey();
+    await expect(as(ANON).anon.reportLeak(id, new Uint8Array([1]))).rejects.toMatchObject({ code: 'NO_ARBITER_KEY' });
   });
 });
 

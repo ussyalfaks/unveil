@@ -1,7 +1,7 @@
 import { Buffer } from 'buffer';
 import { contract } from '@stellar/stellar-sdk';
 import type { Bytes } from './crypto.js';
-import type { Config, NetworkConfig, Profile, RevealRequest, Status, TxResult } from './types.js';
+import type { Config, NetworkConfig, Platform, Profile, RevealRequest, Status, TxResult } from './types.js';
 import type { WalletAdapter } from './wallet.js';
 
 /**
@@ -13,20 +13,35 @@ export interface ContractApi {
   getProfile(anon: string): Promise<Profile | null>;
   getRequest(id: number): Promise<RevealRequest>;
   requestCount(): Promise<number>;
+  getPlatform(id: number): Promise<Platform>;
+  platformCount(): Promise<number>;
 
   setProfile(anon: string, photoHash: Bytes, capturedAt: number): Promise<TxResult>;
   approve(anon: string, id: number, wrappedKey: Bytes): Promise<TxResult>;
   decline(anon: string, id: number): Promise<TxResult>;
   reportLeak(anon: string, id: number, evidenceHash: Bytes): Promise<TxResult>;
 
-  requestReveal(requester: string, anon: string, ndaHash: Bytes, requesterKey: Bytes, deposit: bigint): Promise<TxResult<number>>;
+  requestReveal(
+    requester: string,
+    anon: string,
+    platform: number,
+    ndaHash: Bytes,
+    requesterKey: Bytes,
+    deposit: bigint,
+    maxFee: bigint,
+  ): Promise<TxResult<number>>;
   cancel(requester: string, id: number): Promise<TxResult>;
   release(requester: string, id: number): Promise<TxResult>;
 
-  /** Admin only. */
-  setArbiterKey(admin: string, key: Bytes): Promise<TxResult>;
-  /** Admin only. */
-  resolve(admin: string, id: number, leaked: boolean): Promise<TxResult>;
+  registerPlatform(owner: string, name: string, feeTo: string, arbiter: string, fee: bigint): Promise<TxResult<number>>;
+  /** Platform owner only. */
+  updatePlatform(owner: string, id: number, feeTo: string, arbiter: string, fee: bigint): Promise<TxResult>;
+  /** The platform's arbiter only. */
+  setArbiterKey(arbiter: string, platform: number, key: Bytes): Promise<TxResult>;
+  /** The request's arbiter only. */
+  resolve(arbiter: string, id: number, leaked: boolean): Promise<TxResult>;
+  /** Protocol admin only. */
+  setProtocolFee(admin: string, bps: number, treasury: string): Promise<TxResult>;
 }
 
 // Shapes as the generated client returns them.
@@ -43,11 +58,26 @@ function toRequest(r: Raw): RevealRequest {
     ndaHash: u8(r.nda_hash),
     requesterKey: u8(r.requester_key),
     deposit: BigInt(r.deposit),
+    platform: Number(r.platform),
+    fee: BigInt(r.fee),
+    arbiter: r.arbiter,
     status: tag(r.status),
     createdAt: Number(r.created_at),
     revealedAt: Number(r.revealed_at),
     wrappedKey: u8(r.wrapped_key),
     evidenceHash: u8(r.evidence_hash),
+  };
+}
+
+function toPlatform(p: Raw): Platform {
+  return {
+    id: Number(p.id),
+    name: String(p.name),
+    owner: p.owner,
+    feeTo: p.fee_to,
+    arbiter: p.arbiter,
+    arbiterKey: u8(p.arbiter_key),
+    fee: BigInt(p.fee),
   };
 }
 
@@ -100,7 +130,8 @@ export function sorobanContract({ contractId, network, wallet }: SorobanContract
         token: c.token,
         minDeposit: BigInt(c.min_deposit),
         watchSecs: Number(c.watch_secs),
-        arbiterKey: u8(c.arbiter_key),
+        treasury: c.treasury,
+        protocolFeeBps: Number(c.protocol_fee_bps),
       };
     },
     async getProfile(anon) {
@@ -115,6 +146,12 @@ export function sorobanContract({ contractId, network, wallet }: SorobanContract
     async requestCount() {
       return Number(await read('request_count'));
     },
+    async getPlatform(id) {
+      return toPlatform(await read<Raw>('get_platform', { id }));
+    },
+    async platformCount() {
+      return Number(await read('platform_count'));
+    },
 
     setProfile: (anon, photoHash, capturedAt) =>
       write(anon, 'set_profile', { anon, photo_hash: buf(photoHash), captured_at: BigInt(capturedAt) }),
@@ -123,20 +160,29 @@ export function sorobanContract({ contractId, network, wallet }: SorobanContract
     reportLeak: (anon, id, evidenceHash) =>
       write(anon, 'report_leak', { anon, id: BigInt(id), evidence_hash: buf(evidenceHash) }),
 
-    async requestReveal(requester, anon, ndaHash, requesterKey, deposit) {
+    async requestReveal(requester, anon, platform, ndaHash, requesterKey, deposit, maxFee) {
       const r = await write<bigint | number>(requester, 'request_reveal', {
         requester,
         anon,
+        platform,
         nda_hash: buf(ndaHash),
         requester_key: buf(requesterKey),
         deposit,
+        max_fee: maxFee,
       });
       return { ...r, result: Number(r.result) };
     },
     cancel: (requester, id) => write(requester, 'cancel', { requester, id: BigInt(id) }),
     release: (requester, id) => write(requester, 'release', { requester, id: BigInt(id) }),
 
-    setArbiterKey: (admin, key) => write(admin, 'set_arbiter_key', { key: buf(key) }),
-    resolve: (admin, id, leaked) => write(admin, 'resolve', { id: BigInt(id), leaked }),
+    async registerPlatform(owner, name, feeTo, arbiter, fee) {
+      const r = await write<number>(owner, 'register_platform', { owner, name, fee_to: feeTo, arbiter, fee });
+      return { ...r, result: Number(r.result) };
+    },
+    updatePlatform: (owner, id, feeTo, arbiter, fee) =>
+      write(owner, 'update_platform', { id, fee_to: feeTo, arbiter, fee }),
+    setArbiterKey: (arbiter, platform, key) => write(arbiter, 'set_arbiter_key', { platform, key: buf(key) }),
+    resolve: (arbiter, id, leaked) => write(arbiter, 'resolve', { id: BigInt(id), leaked }),
+    setProtocolFee: (admin, bps, treasury) => write(admin, 'set_protocol_fee', { bps, treasury }),
   };
 }

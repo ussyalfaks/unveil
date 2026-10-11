@@ -1,6 +1,6 @@
 {
   "name": "unveil-sdk",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Controlled identity reveal on Stellar: encrypted live photos, NDA-backed deposits and watermarked viewing.",
   "keywords": [
     "stellar",

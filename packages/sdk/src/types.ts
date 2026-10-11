@@ -29,6 +29,12 @@ export interface RevealRequest {
   requesterKey: Bytes;
   /** Deposit in the token's smallest unit (7 decimals for Stellar assets). */
   deposit: bigint;
+  /** Platform the request came through. */
+  platform: number;
+  /** Platform fee locked with the deposit; paid out only if the anon approves. */
+  fee: bigint;
+  /** Who settles a dispute on this request (fixed when the request was made). */
+  arbiter: string;
   status: Status;
   createdAt: number;
   revealedAt: number;
@@ -39,15 +45,43 @@ export interface RevealRequest {
 }
 
 export interface Config {
-  /** The arbiter / admin wallet. */
+  /** Protocol admin: sets the protocol fee. */
   admin: string;
-  /** Token contract used for deposits. */
+  /** Token contract used for deposits and fees. */
   token: string;
   minDeposit: bigint;
   /** How long a deposit stays locked after a reveal (seconds). */
   watchSecs: number;
+  /** Receives the protocol's cut of every platform fee. */
+  treasury: string;
+  /** Protocol's cut in basis points of the fee (1000 = 10%). */
+  protocolFeeBps: number;
+}
+
+export interface Platform {
+  id: number;
+  name: string;
+  /** Can change feeTo, arbiter and fee. */
+  owner: string;
+  /** Receives the platform's share of fees. */
+  feeTo: string;
+  /** Settles disputes on requests made through this platform. */
+  arbiter: string;
   /** Arbiter's P-256 public key for evidence (empty until set). */
   arbiterKey: Bytes;
+  /** Fee per reveal, smallest units. */
+  fee: bigint;
+}
+
+/** What a reveal through a platform costs, and where the fee goes. */
+export interface FeeQuote {
+  platform: Platform;
+  /** Total fee the requester pays on approval. */
+  fee: bigint;
+  /** Part of the fee that goes to the protocol treasury. */
+  protocolCut: bigint;
+  /** Part of the fee that goes to the platform. */
+  platformCut: bigint;
 }
 
 export interface NetworkConfig {

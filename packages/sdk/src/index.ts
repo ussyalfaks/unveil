@@ -1,5 +1,5 @@
 export { Unveil, UnveilError } from './unveil.js';
-export type { UnveilOptions, UnveilErrorCode, ProgressEvent, RegisterInput, RevealInput, OpenedReveal } from './unveil.js';
+export type { UnveilOptions, UnveilErrorCode, ProgressEvent, RegisterInput, RevealInput, PlatformInput, OpenedReveal } from './unveil.js';
 export { sorobanContract } from './contract.js';
 export type { ContractApi, SorobanContractOptions } from './contract.js';
 export { httpStorage, memoryStorage } from './storage.js';
@@ -8,6 +8,6 @@ export type { WalletAdapter, SignOptions } from './wallet.js';
 export { buildNda, ndaRecipient } from './nda.js';
 export type { NdaFields } from './nda.js';
 export { TESTNET, MAINNET, TOKEN_DECIMALS, toUnits, fromUnits } from './types.js';
-export type { Status, Profile, RevealRequest, Config, NetworkConfig, TxResult } from './types.js';
+export type { Status, Profile, RevealRequest, Config, Platform, FeeQuote, NetworkConfig, TxResult } from './types.js';
 export * as crypto from './crypto.js';
 export type { Bytes, ProfileContent } from './crypto.js';

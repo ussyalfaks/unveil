@@ -2,12 +2,21 @@ import * as C from './crypto.js';
 import type { Bytes, ProfileContent } from './crypto.js';
 import { sorobanContract, type ContractApi } from './contract.js';
 import type { BlobStorage } from './storage.js';
-import { TESTNET, type Config, type NetworkConfig, type Profile, type RevealRequest, type TxResult } from './types.js';
+import {
+  TESTNET,
+  type Config,
+  type FeeQuote,
+  type NetworkConfig,
+  type Platform,
+  type Profile,
+  type RevealRequest,
+  type TxResult,
+} from './types.js';
 import type { WalletAdapter } from './wallet.js';
 
 export type UnveilErrorCode =
   | 'WRONG_WALLET' // the wallet derived a different key than the one used before
-  | 'NO_ARBITER_KEY' // the arbiter hasn't published an evidence key yet
+  | 'NO_ARBITER_KEY' // the request's arbiter hasn't published an evidence key
   | 'HASH_MISMATCH' // storage returned bytes that don't match the on-chain hash
   | 'STALE_PHOTO' // photo older than maxPhotoAgeSecs
   | 'NO_PROFILE' // address has no Unveil profile
@@ -39,6 +48,8 @@ export interface UnveilOptions {
   network?: NetworkConfig;
   /** Override the contract (tests, custom transports). */
   contract?: ContractApi;
+  /** Platform that requests go through by default. Default 0 (the deployment's default platform). */
+  platform?: number;
   /** Reject photos older than this at registration. Default 600 (10 minutes). */
   maxPhotoAgeSecs?: number;
   onProgress?: (e: ProgressEvent) => void;
@@ -61,6 +72,20 @@ export interface RevealInput {
   ndaText: string;
   /** Deposit in smallest units (see `toUnits`). */
   deposit: bigint;
+  /** Platform to go through. Defaults to the client's `platform`. */
+  platform?: number;
+  /** Most fee you'll accept, smallest units. Defaults to the platform's current fee. */
+  maxFee?: bigint;
+}
+
+export interface PlatformInput {
+  name: string;
+  /** Receives the platform's share of fees. */
+  feeTo: string;
+  /** Settles disputes on requests made through the platform. */
+  arbiter: string;
+  /** Fee per reveal, smallest units (see `toUnits`). */
+  fee: bigint;
 }
 
 export interface OpenedReveal extends ProfileContent {
@@ -80,6 +105,8 @@ export class Unveil {
   readonly contract: ContractApi;
   readonly storage: BlobStorage;
   readonly wallet: WalletAdapter;
+  /** Platform that requests go through by default. */
+  readonly platform: number;
   private readonly maxPhotoAge: number;
   private readonly progress: (e: ProgressEvent) => void;
   private readonly now: () => number;
@@ -91,6 +118,7 @@ export class Unveil {
     if (opts.contract) this.contract = opts.contract;
     else if (opts.contractId) this.contract = sorobanContract({ contractId: opts.contractId, network: this.network, wallet: opts.wallet });
     else throw new UnveilError('BAD_INPUT', 'Pass contractId (or a contract implementation)');
+    this.platform = opts.platform ?? 0;
     this.maxPhotoAge = opts.maxPhotoAgeSecs ?? 600;
     this.progress = opts.onProgress ?? (() => {});
     this.now = opts.now ?? (() => Math.floor(Date.now() / 1000));
@@ -131,10 +159,43 @@ export class Unveil {
     }
   }
 
+  /** What a reveal through `platform` costs, and how the fee splits. */
+  async quote(platform = this.platform): Promise<FeeQuote> {
+    const [p, cfg] = await Promise.all([this.contract.getPlatform(platform), this.config()]);
+    const protocolCut = (p.fee * BigInt(cfg.protocolFeeBps)) / 10_000n;
+    return { platform: p, fee: p.fee, protocolCut, platformCut: p.fee - protocolCut };
+  }
+
   /** Unix seconds when the deposit of a revealed request unlocks. */
   async unlocksAt(request: RevealRequest): Promise<number> {
     return request.revealedAt + (await this.config()).watchSecs;
   }
+
+  // ------------------------------------------------------------------ platforms
+
+  readonly platforms = {
+    get: (id: number): Promise<Platform> => this.contract.getPlatform(id),
+
+    list: async (): Promise<Platform[]> => {
+      const n = await this.contract.platformCount();
+      return Promise.all([...Array(n).keys()].map((i) => this.contract.getPlatform(i)));
+    },
+
+    /** Register a platform; the connected wallet becomes its owner. Resolves to its id. */
+    register: async (input: PlatformInput): Promise<TxResult<number>> => {
+      const me = await this.wallet.getAddress();
+      this.progress({ step: 'sign-transaction', action: 'register_platform' });
+      return this.contract.registerPlatform(me, input.name, input.feeTo, input.arbiter, input.fee);
+    },
+
+    /** Owner only. Fields you leave out keep their current value. A new arbiter must set up a new key. */
+    update: async (id: number, changes: Partial<Omit<PlatformInput, 'name'>>): Promise<TxResult> => {
+      const me = await this.wallet.getAddress();
+      const p = await this.contract.getPlatform(id);
+      this.progress({ step: 'sign-transaction', action: 'update_platform' });
+      return this.contract.updatePlatform(me, id, changes.feeTo ?? p.feeTo, changes.arbiter ?? p.arbiter, changes.fee ?? p.fee);
+    },
+  };
 
   // ------------------------------------------------------------------ anon
 
@@ -174,11 +235,9 @@ export class Unveil {
       return this.contract.decline(await this.wallet.getAddress(), id);
     },
 
-    /** Report a leak with the leaked image. It's sealed so only the arbiter can open it. */
+    /** Report a leak with the leaked image. It's sealed so only the request's arbiter can open it. */
     reportLeak: async (id: number, evidence: Bytes): Promise<TxResult> => {
-      const { arbiterKey } = await this.config();
-      if (!arbiterKey.length)
-        throw new UnveilError('NO_ARBITER_KEY', "The arbiter hasn't set up an evidence key yet, so evidence can't be encrypted.");
+      const arbiterKey = await this.evidenceKey(await this.contract.getRequest(id));
       const sealed = await C.sealEvidence(arbiterKey, evidence);
       await this.putVerified(sealed, 'evidence');
       this.progress({ step: 'sign-transaction', action: 'report_leak' });
@@ -189,16 +248,17 @@ export class Unveil {
   // ------------------------------------------------------------------ requester
 
   readonly requester = {
-    /** Sign the NDA and lock the deposit. Resolves to the new request id. */
-    request: async ({ anon, ndaText, deposit }: RevealInput): Promise<TxResult<number>> => {
+    /** Sign the NDA and lock the deposit plus the platform fee. Resolves to the new request id. */
+    request: async ({ anon, ndaText, deposit, platform = this.platform, maxFee }: RevealInput): Promise<TxResult<number>> => {
       const me = await this.wallet.getAddress();
       if (me === anon) throw new UnveilError('BAD_INPUT', "You can't request your own reveal");
       if (!(await this.contract.getProfile(anon))) throw new UnveilError('NO_PROFILE', 'This address has no Unveil profile yet');
       const ndaBytes = new TextEncoder().encode(ndaText);
       await this.putVerified(ndaBytes, 'nda'); // so the anon can read exactly what was signed
+      const fee = maxFee ?? (await this.contract.getPlatform(platform)).fee;
       const secret = await this.requesterSecret(me);
       this.progress({ step: 'sign-transaction', action: 'request_reveal' });
-      return this.contract.requestReveal(me, anon, C.sha256Bytes(ndaBytes), C.publicKeyOf(secret), deposit);
+      return this.contract.requestReveal(me, anon, platform, C.sha256Bytes(ndaBytes), C.publicKeyOf(secret), deposit, fee);
     },
 
     cancel: async (id: number): Promise<TxResult> => {
@@ -231,25 +291,29 @@ export class Unveil {
   // ------------------------------------------------------------------ arbiter
 
   readonly arbiter = {
-    /** Derive the arbiter key from a signature and publish its public half. Admin only. */
-    setupKey: async (): Promise<TxResult> => {
+    /** Derive the evidence key from a signature and publish its public half. The platform's arbiter only. */
+    setupKey: async (platform = this.platform): Promise<TxResult> => {
       const me = await this.wallet.getAddress();
+      const p = await this.contract.getPlatform(platform);
+      if (p.arbiter !== me) throw new UnveilError('NOT_ALLOWED', `Only the arbiter of platform #${platform} can set its evidence key`);
       const secret = await this.arbiterSecret(me);
       this.progress({ step: 'sign-transaction', action: 'set_arbiter_key' });
-      return this.contract.setArbiterKey(me, C.publicKeyOf(secret));
+      return this.contract.setArbiterKey(me, platform, C.publicKeyOf(secret));
     },
 
-    /** Decrypt the leak evidence attached to a disputed request. */
+    /** Decrypt the leak evidence attached to a disputed request. The request's arbiter only. */
     openEvidence: async (id: number): Promise<Bytes> => {
       const me = await this.wallet.getAddress();
-      const [request, cfg] = await Promise.all([this.contract.getRequest(id), this.config()]);
+      const request = await this.contract.getRequest(id);
+      if (request.arbiter !== me) throw new UnveilError('NOT_ALLOWED', 'Only the arbiter of this request can open its evidence');
+      const key = await this.evidenceKey(request);
       const sealed = await this.fetchVerified(request.evidenceHash);
       const secret = await this.arbiterSecret(me);
-      if (!C.bytesEqual(C.publicKeyOf(secret), cfg.arbiterKey)) throw wrongWallet('arbiter key');
+      if (!C.bytesEqual(C.publicKeyOf(secret), key)) throw wrongWallet('arbiter key');
       return C.openEvidence(sealed, secret);
     },
 
-    /** `leaked = true` pays the deposit to the anon; false refunds the requester. Admin only. */
+    /** `leaked = true` pays the deposit to the anon; false refunds the requester. The request's arbiter only. */
     resolve: async (id: number, leaked: boolean): Promise<TxResult> => {
       this.progress({ step: 'sign-transaction', action: 'resolve' });
       return this.contract.resolve(await this.wallet.getAddress(), id, leaked);
@@ -257,6 +321,16 @@ export class Unveil {
   };
 
   // ------------------------------------------------------------------ internals
+
+  /** The evidence key of the arbiter recorded on a request. */
+  private async evidenceKey(request: RevealRequest): Promise<Bytes> {
+    const p = await this.contract.getPlatform(request.platform);
+    if (p.arbiter !== request.arbiter)
+      throw new UnveilError('NO_ARBITER_KEY', "This platform has replaced the request's arbiter, so evidence can't be sealed for them.");
+    if (!p.arbiterKey.length)
+      throw new UnveilError('NO_ARBITER_KEY', "The arbiter hasn't set up an evidence key yet, so evidence can't be encrypted.");
+    return p.arbiterKey;
+  }
 
   private async sign(address: string, message: string): Promise<Bytes> {
     return this.wallet.signMessage(message, { networkPassphrase: this.network.networkPassphrase, address });
