@@ -13,3 +13,4 @@ apps/*/data/
 apps/*/.env.local
 *.tsbuildinfo
 apps/*/next-env.d.ts
+apps/*/AGENTS.md
