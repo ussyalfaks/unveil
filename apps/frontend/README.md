@@ -19,7 +19,8 @@ npm run dev                                       # http://localhost:3000
 | `NEXT_PUBLIC_CONTRACT_ID` | The deployed contract (`scripts/deploy.sh` prints it). |
 | `NEXT_PUBLIC_TOKEN_SYMBOL` | `XLM` or `USDC`, for display. |
 | `NEXT_PUBLIC_NETWORK` | `testnet` (default) or `mainnet`. |
-| `DATA_DIR` | Where the storage API writes encrypted files (default `apps/frontend/data`). |
+| `DATA_DIR` | Where the storage API writes encrypted files locally (default `apps/frontend/data`). |
+| `BLOB_READ_WRITE_TOKEN` | Set by Vercel when a Blob store is connected; switches storage to Vercel Blob. |
 
 ## Layout
 
@@ -35,11 +36,23 @@ components/
   AuditPanel.tsx             every request on-chain
   ArbiterPanel.tsx           evidence key, disputes, evidence viewer
 lib/
-  blob-store.ts              disk storage used by the API routes
+  blob-store.ts              storage used by the API routes (Vercel Blob or disk)
 ```
 
 ## Deploying
 
-The storage API writes to disk, so it needs a host with a persistent volume (Render, Railway, Fly.io). On serverless hosts such as Vercel there's no persistent disk: replace the two functions in `lib/blob-store.ts` with S3 or Vercel Blob calls. Files are content-addressed and encrypted, so any store works.
+### Vercel
+
+1. **Add New → Project**, import the repo.
+2. **Root Directory:** `apps/frontend`. Leave the build and install commands as they are, and keep "Include files outside the root directory" on (the app builds `packages/sdk` from the workspace).
+3. **Environment variables:** `NEXT_PUBLIC_CONTRACT_ID`, `NEXT_PUBLIC_TOKEN_SYMBOL`, `NEXT_PUBLIC_NETWORK`, `NEXT_PUBLIC_PLATFORM_ID` (copy them from `.env.local`).
+4. **Storage → Create → Blob** (private), and connect it to the project. That sets `BLOB_READ_WRITE_TOKEN`, and the storage API switches from the disk to Vercel Blob automatically.
+5. Deploy. Pushes to `main` redeploy.
+
+Vercel has no persistent disk, so step 4 is required: without it, uploaded photos disappear.
+
+### Other hosts
+
+On a host with a persistent volume (Render, Railway, Fly.io), no Blob store is needed: set `DATA_DIR` to the volume. `lib/blob-store.ts` is the only file to change for S3 or IPFS; files are content-addressed and encrypted, so any store works.
 
 The camera needs HTTPS (or `localhost`).
